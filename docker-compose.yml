@@ -1,0 +1,80 @@
+version: "3.8"
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: gradi-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: gradi123
+      MYSQL_DATABASE: gradi
+      MYSQL_USER: gradi_user
+      MYSQL_PASSWORD: gradi123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/mysql:/docker-entrypoint-initdb.d
+    networks:
+      - gradi-network
+
+  # MongoDB
+  mongodb:
+    image: mongo:6.0
+    container_name: gradi-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: gradi_admin
+      MONGO_INITDB_ROOT_PASSWORD: gradi123
+      MONGO_INITDB_DATABASE: gradi
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./database/mongodb:/docker-entrypoint-initdb.d
+    networks:
+      - gradi-network
+
+  # Redis
+  redis:
+    image: redis:7.0-alpine
+    container_name: gradi-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - gradi-network
+
+  # Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: gradi-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - gradi-network
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: gradi-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - gradi-network
+
+volumes:
+  mysql_data:
+  mongodb_data:
+  redis_data:
+
+networks:
+  gradi-network:
+    driver: bridge
