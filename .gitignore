@@ -90,3 +90,13 @@ secrets/
 tmp/
 temp/
 *.tmp
+
+# images
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# video
+*.mp4
+*.mov
