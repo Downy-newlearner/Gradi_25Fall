@@ -230,17 +230,30 @@ if __name__ == "__main__":
     results = []
 
     # annotation 파일 로드
-    ann1 = load_annotation_dict("images/LLM_annotation/annotation.txt")
-    ann2 = load_annotation_dict("images/LLM_annotation_wrong/annotation_wrong_answer.txt")
+    ann1 = load_annotation_dict("test/images/LLM_annotation/annotation.txt")
+    ann2 = load_annotation_dict("test/images/LLM_annotation_wrong/annotation_wrong_answer.txt")
 
-    # 폴더별 처리
-    results.extend(process_annotations("images/LLM_annotation", ann1, "LLM_annotation"))
-    results.extend(process_annotations("images/LLM_annotation_wrong", ann2, "LLM_annotation_wrong"))
+    # 테스트할 모델과 API 키를 dictionary로 정의
+    models = {
+        "meta-llama/llama-4-scout-17b-16e-instruct": os.environ.get("GROQ_API_KEY"),
+        # 테스트할 모델 추가
+    }
+
+    # 폴더와 annotation 매핑
+    data_sources = [
+        ("test/images/LLM_annotation", ann1, "LLM_annotation"),
+        ("test/images/LLM_annotation_wrong", ann2, "LLM_annotation_wrong")
+    ]
+
+    # 각 모델별로 각 폴더 처리
+    for model_name, api_key in models.items():
+        for folder, ann_dict, source_name in data_sources:
+            results.extend(process_annotations(folder, ann_dict, source_name, model_name, api_key))
 
     # CSV 저장
-    with open("results.csv", "w", newline="", encoding="utf-8") as csvfile:
+    with open("./test/llm_agent/results.csv", "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=[
-            "source", "book", "page", "problem_number", "type", "answer", "response", "correct"
+            "source", "model", "book", "page", "problem_number", "type", "answer", "response", "correct"
         ])
         writer.writeheader()
         writer.writerows(results)
