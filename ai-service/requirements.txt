@@ -45,3 +45,8 @@
 groq
 python-dotenv
 tqdm
+pillow
+openai
+google
+pandas
+google-generativeai
