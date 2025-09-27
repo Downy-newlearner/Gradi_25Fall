@@ -26,9 +26,9 @@ class LabeledInputField extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: width ?? 342,
-      height: height ?? 76,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           // Label
           Text(

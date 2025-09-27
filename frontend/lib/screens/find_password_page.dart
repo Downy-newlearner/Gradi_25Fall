@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../widgets/status_bar.dart';
 import '../widgets/back_button.dart' as custom;
 import '../widgets/page_title.dart';
 import '../widgets/labeled_input_field.dart';
@@ -52,44 +51,53 @@ class _FindPasswordPageState extends State<FindPasswordPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30.0),
-          child: Column(
-            children: [
-              const StatusBar(),
-              const SizedBox(height: 20),
-              Row(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight:
+                  MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.top -
+                  MediaQuery.of(context).padding.bottom,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30.0),
+              child: Column(
                 children: [
-                  custom.CustomBackButton(onPressed: _handleBack),
-                  const SizedBox(width: 20),
-                  const PageTitle(text: '비밀번호 찾기', width: 126, height: 24),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      custom.CustomBackButton(onPressed: _handleBack),
+                      const SizedBox(width: 20),
+                      const PageTitle(text: '비밀번호 찾기'),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  LabeledInputField(
+                    label: '이름*',
+                    placeholder: '이름을 입력해주세요',
+                    controller: _nameController,
+                    keyboardType: TextInputType.text,
+                  ),
+                  const SizedBox(height: 24),
+                  LabeledInputField(
+                    label: '이메일*',
+                    placeholder: '이메일 주소를 입력해주세요',
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 24),
+                  LabeledInputField(
+                    label: '아이디*',
+                    placeholder: '아이디를 입력해주세요',
+                    controller: _idController,
+                    keyboardType: TextInputType.text,
+                  ),
+                  const SizedBox(height: 20),
+                  NextButton(text: '다음', onPressed: _handleNext),
+                  const SizedBox(height: 60), // Bottom spacing
                 ],
               ),
-              const SizedBox(height: 20),
-              LabeledInputField(
-                label: '이름*',
-                placeholder: '이름을 입력해주세요',
-                controller: _nameController,
-                keyboardType: TextInputType.text,
-              ),
-              const SizedBox(height: 24),
-              LabeledInputField(
-                label: '이메일*',
-                placeholder: '이메일 주소를 입력해주세요',
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 24),
-              LabeledInputField(
-                label: '아이디*',
-                placeholder: '아이디를 입력해주세요',
-                controller: _idController,
-                keyboardType: TextInputType.text,
-              ),
-              const SizedBox(height: 20),
-              NextButton(text: '다음', onPressed: _handleNext),
-              const Spacer(),
-            ],
+            ),
           ),
         ),
       ),

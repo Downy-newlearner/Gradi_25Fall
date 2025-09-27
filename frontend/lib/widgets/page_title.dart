@@ -18,7 +18,6 @@ class PageTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: width,
-      height: height,
       child: Text(
         text,
         style: const TextStyle(
@@ -29,6 +28,7 @@ class PageTitle extends StatelessWidget {
           color: Color(0xFF5C5C5C),
         ),
         textAlign: textAlign ?? TextAlign.center,
+        overflow: TextOverflow.visible,
       ),
     );
   }

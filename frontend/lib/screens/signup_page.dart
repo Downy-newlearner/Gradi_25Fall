@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../widgets/status_bar.dart';
 import '../widgets/back_button.dart' as custom;
 import '../widgets/page_title.dart';
 import '../widgets/labeled_input_field.dart';
@@ -52,67 +51,76 @@ class _SignUpPageState extends State<SignUpPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30.0),
-          child: Column(
-            children: [
-              const StatusBar(),
-              const SizedBox(height: 20),
-              Row(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight:
+                  MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.top -
+                  MediaQuery.of(context).padding.bottom,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30.0),
+              child: Column(
                 children: [
-                  custom.CustomBackButton(onPressed: _handleBack),
-                  const SizedBox(width: 20),
-                  const PageTitle(text: '회원가입', width: 70, height: 24),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      custom.CustomBackButton(onPressed: _handleBack),
+                      const SizedBox(width: 20),
+                      const PageTitle(text: '회원가입'),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  LabeledInputField(
+                    label: '이름*',
+                    placeholder: '이름을 입력해주세요',
+                    controller: _nameController,
+                    keyboardType: TextInputType.text,
+                  ),
+                  const SizedBox(height: 24),
+                  LabeledInputField(
+                    label: '아이디*',
+                    placeholder: '아이디를 입력해주세요',
+                    controller: _idController,
+                    keyboardType: TextInputType.text,
+                  ),
+                  const SizedBox(height: 24),
+                  LabeledInputField(
+                    label: '이메일*',
+                    placeholder: '이메일 주소를 입력해주세요',
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 24),
+                  LabeledInputField(
+                    label: '휴대전화*',
+                    placeholder: '전화번호를 입력해주세요',
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                  ),
+                  const SizedBox(height: 24),
+                  LabeledInputField(
+                    label: '비밀번호*',
+                    placeholder: '비밀번호를 입력해주세요',
+                    controller: _passwordController,
+                    keyboardType: TextInputType.text,
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 24),
+                  LabeledInputField(
+                    label: '비밀번호 확인*',
+                    placeholder: '비밀번호를 다시 입력해주세요',
+                    controller: _confirmPasswordController,
+                    keyboardType: TextInputType.text,
+                    obscureText: true,
+                  ),
+                  const SizedBox(height: 20),
+                  NextButton(text: '다음', onPressed: _handleSignUp),
+                  const SizedBox(height: 60), // Bottom spacing
                 ],
               ),
-              const SizedBox(height: 20),
-              LabeledInputField(
-                label: '이름*',
-                placeholder: '이름을 입력해주세요',
-                controller: _nameController,
-                keyboardType: TextInputType.text,
-              ),
-              const SizedBox(height: 24),
-              LabeledInputField(
-                label: '아이디*',
-                placeholder: '아이디를 입력해주세요',
-                controller: _idController,
-                keyboardType: TextInputType.text,
-              ),
-              const SizedBox(height: 24),
-              LabeledInputField(
-                label: '이메일*',
-                placeholder: '이메일 주소를 입력해주세요',
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-              ),
-              const SizedBox(height: 24),
-              LabeledInputField(
-                label: '휴대전화*',
-                placeholder: '전화번호를 입력해주세요',
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-              ),
-              const SizedBox(height: 24),
-              LabeledInputField(
-                label: '비밀번호*',
-                placeholder: '비밀번호를 입력해주세요',
-                controller: _passwordController,
-                keyboardType: TextInputType.text,
-                obscureText: true,
-              ),
-              const SizedBox(height: 24),
-              LabeledInputField(
-                label: '비밀번호 확인*',
-                placeholder: '비밀번호를 다시 입력해주세요',
-                controller: _confirmPasswordController,
-                keyboardType: TextInputType.text,
-                obscureText: true,
-              ),
-              const SizedBox(height: 20),
-              NextButton(text: '다음', onPressed: _handleSignUp),
-              const Spacer(),
-            ],
+            ),
           ),
         ),
       ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../widgets/status_bar.dart';
 import '../widgets/back_button.dart' as custom;
 import '../widgets/page_title.dart';
 import '../widgets/verification_code_input.dart';
@@ -56,63 +55,72 @@ class _FindPasswordVerificationPageState
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30.0),
-          child: Column(
-            children: [
-              const StatusBar(),
-              const SizedBox(height: 20),
-              Row(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight:
+                  MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.top -
+                  MediaQuery.of(context).padding.bottom,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30.0),
+              child: Column(
                 children: [
-                  custom.CustomBackButton(onPressed: _handleBack),
-                  const SizedBox(width: 20),
-                  const PageTitle(text: '비밀번호 찾기', width: 109, height: 24),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      custom.CustomBackButton(onPressed: _handleBack),
+                      const SizedBox(width: 20),
+                      const PageTitle(text: '비밀번호 찾기'),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    '${widget.userName}님, 환영합니다.',
+                    style: const TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 24,
+                      color: Color(0xFF5C5C5C),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  const Text(
+                    '이메일로 보내드린 4자 코드를 입력해주세요.',
+                    style: TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: Color(0xFF5C5C5C),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  VerificationCodeInput(
+                    length: 4,
+                    onChanged: (code) {
+                      _codeController.text = code;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  GestureDetector(
+                    onTap: _handleResendCode,
+                    child: const Text(
+                      '인증번호를 받지 못했나요? 재전송',
+                      style: TextStyle(
+                        fontFamily: 'Pretendard',
+                        fontWeight: FontWeight.w500,
+                        fontSize: 16,
+                        color: Color(0xFFADADAD),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  NextButton(text: '다음', onPressed: _handleNext),
+                  const SizedBox(height: 60), // Bottom spacing
                 ],
               ),
-              const SizedBox(height: 20),
-              Text(
-                '${widget.userName}님, 환영합니다.',
-                style: const TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 24,
-                  color: Color(0xFF5C5C5C),
-                ),
-              ),
-              const SizedBox(height: 7),
-              const Text(
-                '이메일로 보내드린 4자 코드를 입력해주세요.',
-                style: TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                  color: Color(0xFF5C5C5C),
-                ),
-              ),
-              const SizedBox(height: 24),
-              VerificationCodeInput(
-                length: 4,
-                onChanged: (code) {
-                  _codeController.text = code;
-                },
-              ),
-              const SizedBox(height: 20),
-              GestureDetector(
-                onTap: _handleResendCode,
-                child: const Text(
-                  '인증번호를 받지 못했나요? 재전송',
-                  style: TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontWeight: FontWeight.w500,
-                    fontSize: 16,
-                    color: Color(0xFFADADAD),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              NextButton(text: '다음', onPressed: _handleNext),
-              const Spacer(),
-            ],
+            ),
           ),
         ),
       ),
