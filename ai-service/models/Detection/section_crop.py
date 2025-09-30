@@ -67,7 +67,11 @@ class SectionPredictor:
         for i, image_path in enumerate(image_paths):
             logger.info(f"처리 중 ({i+1}/{len(image_paths)}): {image_path.name}")
             try:
-                results = self.model(str(image_path))
+                results = self.model(str(image_path), 
+                                   imgsz=2048,      # 이미지 크기
+                                   conf=0.25,       # 신뢰도 임계값
+                                   iou=0.7,         # IoU 임계값 (중복 제거)
+                                   max_det=300)     # 최대 검출 수
                 result = results[0]
 
                 pred_data = {
@@ -150,7 +154,7 @@ class SectionPredictor:
 def main() -> None:
     """메인 실행 함수."""
     current_dir = Path(__file__).parent
-    model_path = current_dir / "best_0927_수능완성영어.pt"
+    model_path = current_dir / "0930_english_best_detection_yolov8n.pt"
     raws_dir = current_dir.parent / "recognition" / "exp_images" / "test_images"
 
     predictions_output_dir = current_dir / "predictions_visualization"
