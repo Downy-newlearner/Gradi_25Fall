@@ -155,7 +155,7 @@ def main() -> None:
     """메인 실행 함수."""
     current_dir = Path(__file__).parent
     model_path = current_dir / "0930_english_best_detection_yolov8n.pt"
-    raws_dir = current_dir.parent / "recognition" / "exp_images" / "test_images"
+    raws_dir = current_dir.parent / "recognition" / "exp_images"
 
     predictions_output_dir = current_dir / "predictions_visualization"
     sections_output_dir = current_dir / "sections"

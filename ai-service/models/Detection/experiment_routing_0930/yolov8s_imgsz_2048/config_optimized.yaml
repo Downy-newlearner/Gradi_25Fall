@@ -1,0 +1,72 @@
+# Routing Experiment - YOLOv8s @ 2048 (작은 객체 전용)
+
+task: detect
+mode: train
+model: yolov8s.pt
+data: /home/jdh251425/2509 Gradi-Detection/english_problems_data_small4/data.yaml
+
+# 학습
+epochs: 100
+patience: 25
+batch: 4
+imgsz: 2048
+device: [0,1,2,3]
+workers: 8
+
+# 프로젝트
+project: /home/jdh251425/2509 Gradi-Detection/experiment_routing_0930/yolov8s_imgsz_2048
+name: train
+exist_ok: true
+
+# 옵티마이저
+optimizer: AdamW
+lr0: 0.01
+lrf: 0.01
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 2.0
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+# Loss
+box: 7.5
+cls: 1.5
+dfl: 1.5
+
+# 스캔 이미지 친화
+rect: true
+multi_scale: false
+
+# 경량 증강 (합의 범위)
+degrees: 0
+perspective: 0.0
+translate: 0.02
+scale: 0.05
+shear: 0.0
+flipud: 0.0
+fliplr: 0.0
+mosaic: 0.0
+mixup: 0.0
+cutmix: 0.0
+copy_paste: 0.0
+auto_augment: null
+hsv_h: 0.0
+hsv_s: 0.0
+hsv_v: 0.0
+erasing: 0.0
+
+# 검증/추론
+iou: 0.7
+conf: 0.22
+max_det: 300
+val: true
+amp: true
+plots: true
+verbose: true
+seed: 0
+deterministic: true
+single_cls: false
+cos_lr: false
+cache: false
+
+
