@@ -1,0 +1,310 @@
+---
+alwaysApply: true
+description: Flutter widget library and reuse guidelines
+---
+
+# Flutter Widget Library - Gradi Project
+
+This project has a comprehensive set of reusable Flutter widgets that should be used instead of creating new ones. Always check existing widgets before creating new ones.
+
+## Core Widgets
+
+### StatusBar Widget
+
+- **File**: [frontend/lib/widgets/status_bar.dart](mdc:frontend/lib/widgets/status_bar.dart)
+- **Purpose**: Mobile status bar with time, battery, WiFi, and signal indicators
+- **Usage**: `const StatusBar()`
+- **Features**: Custom painter for icons, configurable time and battery level
+
+### AppLogo Widget
+
+- **File**: [frontend/lib/widgets/app_logo.dart](mdc:frontend/lib/widgets/app_logo.dart)
+- **Purpose**: GRADI app logo with gradient text effect
+- **Usage**: `const AppLogo()`
+- **Features**: ShaderMask gradient, AppleSDGothicNeoH00 font, 88.98px size
+
+### InputField Widget
+
+- **File**: [frontend/lib/widgets/input_field.dart](mdc:frontend/lib/widgets/input_field.dart)
+- **Purpose**: Standard text input field with Figma styling
+- **Usage**: `InputField(placeholder: 'text', controller: controller)`
+- **Features**: #F3F3F3 background, #A0A0A0 text, 342x50 size, rounded corners
+
+### LabeledInputField Widget
+
+- **File**: [frontend/lib/widgets/labeled_input_field.dart](mdc:frontend/lib/widgets/labeled_input_field.dart)
+- **Purpose**: Input field with label above (for forms)
+- **Usage**: `LabeledInputField(label: 'Label*', placeholder: 'placeholder')`
+- **Features**: Label + input field combination, 342x76 total size
+
+### LoginButton Widget
+
+- **File**: [frontend/lib/widgets/login_button.dart](mdc:frontend/lib/widgets/login_button.dart)
+- **Purpose**: Primary action button with gradient background
+- **Usage**: `LoginButton(text: '로그인', onPressed: callback)`
+- **Features**: AC5BF8→636ACF gradient, 144° angle, 342x50 size
+
+### NextButton Widget
+
+- **File**: [frontend/lib/widgets/next_button.dart](mdc:frontend/lib/widgets/next_button.dart)
+- **Purpose**: Secondary action button with gradient background
+- **Usage**: `NextButton(text: '다음', onPressed: callback)`
+- **Features**: Same gradient as LoginButton, reusable for navigation
+
+### SNSButton Widget
+
+- **File**: [frontend/lib/widgets/sns_button.dart](mdc:frontend/lib/widgets/sns_button.dart)
+- **Purpose**: Social login buttons (Kakao, Google)
+- **Usage**: `SNSButton(provider: SNSProvider.kakao, onPressed: callback)`
+- **Features**: Brand colors, custom icons, 50x50 size
+
+### CustomBackButton Widget
+
+- **File**: [frontend/lib/widgets/back_button.dart](mdc:frontend/lib/widgets/back_button.dart)
+- **Purpose**: Custom back navigation button
+- **Usage**: `custom.CustomBackButton(onPressed: callback)`
+- **Features**: Custom arrow icon, 38x38 size, #5C5C5C color
+- **Note**: Use `as custom` prefix to avoid conflict with Flutter's BackButton
+
+### PageTitle Widget
+
+- **File**: [frontend/lib/widgets/page_title.dart](mdc:frontend/lib/widgets/page_title.dart)
+- **Purpose**: Page title text with consistent styling
+- **Usage**: `PageTitle(text: 'Title', width: 92, height: 24)`
+- **Features**: Pretendard font, 20px size, #5C5C5C color
+
+### LinksSection Widget
+
+- **File**: [frontend/lib/widgets/links_section.dart](mdc:frontend/lib/widgets/links_section.dart)
+- **Purpose**: Horizontal links with separators
+- **Usage**: `LinksSection(onSignUp: callback, onFindID: callback, onFindPW: callback)`
+- **Features**: Three links with dividers, different colors for emphasis
+
+### SNSDivider Widget
+
+- **File**: [frontend/lib/widgets/sns_divider.dart](mdc:frontend/lib/widgets/sns_divider.dart)
+- **Purpose**: Divider with text for SNS login section
+- **Usage**: `SNSDivider(text: 'SNS 간편 로그인')`
+- **Features**: Horizontal lines with centered text, 339x17 size
+
+### ErrorInputField Widget
+
+- **File**: [frontend/lib/widgets/error_input_field.dart](mdc:frontend/lib/widgets/error_input_field.dart)
+- **Purpose**: Input field with error state and error message
+- **Usage**: `ErrorInputField(label: 'Label*', placeholder: 'placeholder', hasError: true, errorText: 'Error message')`
+- **Features**: Error border (gradient color), error text, dynamic height (102px with error, 76px normal)
+
+### VerificationCodeInput Widget
+
+- **File**: [frontend/lib/widgets/verification_code_input.dart](mdc:frontend/lib/widgets/verification_code_input.dart)
+- **Purpose**: 4-digit verification code input with individual boxes
+- **Usage**: `VerificationCodeInput(length: 4, onChanged: (code) => print(code))`
+- **Features**: Auto-focus navigation, number-only input, visual feedback for filled boxes
+
+### UserIDCard Widget
+
+- **File**: [frontend/lib/widgets/user_id_card.dart](mdc:frontend/lib/widgets/user_id_card.dart)
+- **Purpose**: Display user ID result with personalized message
+- **Usage**: `UserIDCard(userName: '최윤정', userId: '0311yjung')`
+- **Features**: Two-line text display, personalized greeting, 24px font size
+
+## Screen Components
+
+### LoginPage Screen
+
+- **File**: [frontend/lib/screens/login_page.dart](mdc:frontend/lib/screens/login_page.dart)
+- **Purpose**: Complete login screen implementation
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => LoginPage()))`
+- **Features**: Full login flow with all components integrated
+
+### FindIDPage Screen
+
+- **File**: [frontend/lib/screens/find_id_page.dart](mdc:frontend/lib/screens/find_id_page.dart)
+- **Purpose**: Find ID form screen
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => FindIDPage()))`
+- **Features**: Name and email input with validation
+
+### FindIDErrorPage Screen
+
+- **File**: [frontend/lib/screens/find_id_error_page.dart](mdc:frontend/lib/screens/find_id_error_page.dart)
+- **Purpose**: Find ID form screen with error state
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => FindIDErrorPage()))`
+- **Features**: Name input (normal) and email input (error state) with error message
+
+### FindPasswordPage Screen
+
+- **File**: [frontend/lib/screens/find_password_page.dart](mdc:frontend/lib/screens/find_password_page.dart)
+- **Purpose**: Find password form screen
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => FindPasswordPage()))`
+- **Features**: Name, email, and ID input fields with validation
+
+### FindIDVerificationPage Screen
+
+- **File**: [frontend/lib/screens/find_id_verification_page.dart](mdc:frontend/lib/screens/find_id_verification_page.dart)
+- **Purpose**: Find ID verification code input screen
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => FindIDVerificationPage(userName: '최윤정')))`
+- **Features**: 4-digit verification code input, personalized welcome message, resend code link
+
+### FindIDResultPage Screen
+
+- **File**: [frontend/lib/screens/find_id_result_page.dart](mdc:frontend/lib/screens/find_id_result_page.dart)
+- **Purpose**: Find ID result display screen
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => FindIDResultPage(userName: '최윤정', userId: '0311yjung')))`
+- **Features**: User ID result display, login redirect button, personalized message
+
+### FindPasswordPage Screen
+
+- **File**: [frontend/lib/screens/find_password_page.dart](mdc:frontend/lib/screens/find_password_page.dart)
+- **Purpose**: Find password form screen
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => FindPasswordPage()))`
+- **Features**: Name, email, and ID input fields with validation
+
+### FindPasswordVerificationPage Screen
+
+- **File**: [frontend/lib/screens/find_password_verification_page.dart](mdc:frontend/lib/screens/find_password_verification_page.dart)
+- **Purpose**: Find password verification code input screen
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => FindPasswordVerificationPage(userName: '최윤정')))`
+- **Features**: 4-digit verification code input, personalized welcome message, resend code link
+
+### SignUpPage Screen
+
+- **File**: [frontend/lib/screens/signup_page.dart](mdc:frontend/lib/screens/signup_page.dart)
+- **Purpose**: User registration form screen
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => SignUpPage()))`
+- **Features**: Name, ID, email, phone, password, and confirm password input fields with validation
+
+### FindIDErrorPage Screen
+
+- **File**: [frontend/lib/screens/find_id_error_page.dart](mdc:frontend/lib/screens/find_id_error_page.dart)
+- **Purpose**: Find ID error display screen
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => FindIDErrorPage()))`
+- **Features**: Error message display, retry button, back to login link
+
+### FindPasswordErrorPage Screen
+
+- **File**: [frontend/lib/screens/find_password_error_page.dart](mdc:frontend/lib/screens/find_password_error_page.dart)
+- **Purpose**: Find password error display screen
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => FindPasswordErrorPage()))`
+- **Features**: Error message display, retry button, back to login link
+
+### ResetPasswordPage Screen
+
+- **File**: [frontend/lib/screens/reset_password_page.dart](mdc:frontend/lib/screens/reset_password_page.dart)
+- **Purpose**: Password reset form screen
+- **Usage**: `Navigator.push(context, MaterialPageRoute(builder: (context) => ResetPasswordPage()))`
+- **Features**: New password and confirm password input fields with validation
+
+## App Architecture
+
+### Routing System
+
+- **File**: [frontend/lib/routes/app_routes.dart](mdc:frontend/lib/routes/app_routes.dart)
+- **Purpose**: Centralized routing configuration
+- **Features**: Named routes, route generation for parameterized routes, comprehensive navigation flow
+
+### Theme System
+
+- **File**: [frontend/lib/theme/app_theme.dart](mdc:frontend/lib/theme/app_theme.dart)
+- **Purpose**: Centralized theme configuration matching Figma design system
+- **Features**: Colors, typography, input decorations, button styles, consistent theming
+
+### Main Application
+
+- **File**: [frontend/lib/main.dart](mdc:frontend/lib/main.dart)
+- **Purpose**: App entry point with routing and theme configuration
+- **Features**: System UI styling, route handling, error pages
+
+## Navigation Flow
+
+```
+LoginPage
+├── SignUpPage
+├── FindIDPage
+│   ├── FindIDErrorPage
+│   └── FindIDVerificationPage
+│       └── FindIDResultPage
+└── FindPasswordPage
+    ├── FindPasswordErrorPage
+    └── FindPasswordVerificationPage
+        └── ResetPasswordPage
+```
+
+## Design System Guidelines
+
+### Colors
+
+- **Primary Gradient**: AC5BF8 → 636ACF (144°)
+- **Background**: #F3F3F3 (input fields)
+- **Text Primary**: #5C5C5C (labels, titles)
+- **Text Secondary**: #A0A0A0 (placeholders, hints)
+- **Accent**: #666EDE (links)
+- **White**: #FFFFFF (backgrounds)
+
+### Typography
+
+- **Primary Font**: Pretendard
+- **Logo Font**: AppleSDGothicNeoH00
+- **Title Size**: 20px, FontWeight.w600
+- **Body Size**: 15px, FontWeight.w500
+- **Label Size**: 15px, FontWeight.w600
+
+### Spacing
+
+- **Standard Padding**: 30px horizontal
+- **Input Field Size**: 342x50
+- **Button Size**: 342x50
+- **Labeled Input**: 342x76
+- **Standard Gap**: 20-24px between elements
+
+## Usage Rules
+
+1. **Always import existing widgets** before creating new ones
+2. **Use the exact widget names** as specified above
+3. **Follow the established design system** for colors, fonts, and spacing
+4. **Maintain consistent sizing** across all components
+5. **Use proper import prefixes** to avoid naming conflicts (e.g., `as custom` for CustomBackButton)
+6. **Test widgets in isolation** before integrating into screens
+7. **Follow the established file structure** in `lib/widgets/` and `lib/screens/`
+
+## Common Patterns
+
+### Form Input Pattern
+
+```dart
+final TextEditingController _controller = TextEditingController();
+
+// In build method:
+LabeledInputField(
+  label: 'Label*',
+  placeholder: 'Placeholder text',
+  controller: _controller,
+  keyboardType: TextInputType.text,
+)
+```
+
+### Button Pattern
+
+```dart
+void _handleAction() {
+  // Handle action logic
+}
+
+// In build method:
+LoginButton(
+  text: 'Button Text',
+  onPressed: _handleAction,
+)
+```
+
+### Navigation Pattern
+
+```dart
+void _handleNavigation() {
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (context) => TargetScreen()),
+  );
+}
+```
+
+Always reference these existing widgets before creating new ones to maintain consistency and avoid duplication.
