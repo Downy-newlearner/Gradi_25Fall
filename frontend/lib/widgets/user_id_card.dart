@@ -7,16 +7,16 @@ class UserIDCard extends StatelessWidget {
   final double? height;
 
   const UserIDCard({
-    Key? key,
+    super.key,
     required this.userName,
     required this.userId,
     this.width,
     this.height,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: width ?? 193,
       height: height ?? 58,
       child: RichText(
@@ -30,8 +30,8 @@ class UserIDCard extends StatelessWidget {
             height: 1.193,
           ),
           children: [
-            TextSpan(text: '${userName}님의 아이디는\n'),
-            TextSpan(text: userId),
+            TextSpan(text: '$userName님의 아이디는\n'),
+            TextSpan(text: '$userId입니다.'),
           ],
         ),
       ),

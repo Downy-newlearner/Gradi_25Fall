@@ -9,12 +9,12 @@ class SNSButton extends StatelessWidget {
   final double? height;
 
   const SNSButton({
-    Key? key,
+    super.key,
     required this.provider,
     this.onPressed,
     this.width,
     this.height,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

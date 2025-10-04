@@ -8,6 +8,8 @@ import '../screens/find_id_result_page.dart';
 import '../screens/find_password_page.dart';
 import '../screens/find_password_error_page.dart';
 import '../screens/find_password_verification_page.dart';
+import '../screens/find_password_reset_page.dart';
+import '../screens/password_reset_success_page.dart';
 import '../screens/reset_password_page.dart';
 
 class AppRoutes {
@@ -20,6 +22,8 @@ class AppRoutes {
   static const String findPassword = '/find-password';
   static const String findPasswordError = '/find-password-error';
   static const String findPasswordVerification = '/find-password-verification';
+  static const String findPasswordReset = '/find-password-reset';
+  static const String passwordResetSuccess = '/password-reset-success';
   static const String resetPassword = '/reset-password';
 
   static Map<String, WidgetBuilder> get routes => {
@@ -35,10 +39,8 @@ class AppRoutes {
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
       case findIdVerification:
-        final args = settings.arguments as Map<String, dynamic>?;
         return MaterialPageRoute(
-          builder: (context) =>
-              FindIDVerificationPage(userName: args?['userName'] ?? ''),
+          builder: (context) => const FindIDVerificationPage(),
         );
       case findIdResult:
         final args = settings.arguments as Map<String, dynamic>?;
@@ -49,10 +51,17 @@ class AppRoutes {
           ),
         );
       case findPasswordVerification:
-        final args = settings.arguments as Map<String, dynamic>?;
         return MaterialPageRoute(
           builder: (context) =>
-              FindPasswordVerificationPage(userName: args?['userName'] ?? ''),
+              const FindPasswordVerificationPage(userName: ''),
+        );
+      case findPasswordReset:
+        return MaterialPageRoute(
+          builder: (context) => const FindPasswordResetPage(),
+        );
+      case passwordResetSuccess:
+        return MaterialPageRoute(
+          builder: (context) => const PasswordResetSuccessPage(),
         );
       default:
         return null;

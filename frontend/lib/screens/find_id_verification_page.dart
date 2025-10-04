@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:developer' as developer;
+import 'dart:io';
 import '../widgets/back_button.dart' as custom;
 import '../widgets/page_title.dart';
 import '../widgets/verification_code_input.dart';
 import '../widgets/next_button.dart';
 
 class FindIDVerificationPage extends StatefulWidget {
-  final String userName;
-
-  const FindIDVerificationPage({Key? key, required this.userName})
-    : super(key: key);
+  const FindIDVerificationPage({super.key});
 
   @override
   State<FindIDVerificationPage> createState() => _FindIDVerificationPageState();
@@ -16,36 +17,126 @@ class FindIDVerificationPage extends StatefulWidget {
 
 class _FindIDVerificationPageState extends State<FindIDVerificationPage> {
   String _verificationCode = '';
+  bool _isLoading = false;
+  String? _userName;
+  String? _email;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // arguments에서 데이터 추출
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null) {
+      _userName = args['userName'] as String?;
+      _email = args['email'] as String?;
+    }
+  }
 
   void _handleBack() {
     Navigator.of(context).pop();
   }
 
-  void _handleNext() {
-    if (_verificationCode.length != 4) {
+  void _handleNext() async {
+    if (_verificationCode.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('4자리 인증번호를 입력해주세요.'),
+          content: Text('6자리 인증번호를 입력해주세요.'),
           backgroundColor: Color(0xFFFF4258),
         ),
       );
       return;
     }
 
-    // Navigate to result page
-    Navigator.pushNamed(
-      context,
-      '/find-id-result',
-      arguments: {
-        'userName': widget.userName,
-        'userId': '0311yjung', // Mock user ID
-      },
-    );
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 개발 환경에서 SSL 인증서 검증 우회 (프로덕션에서는 제거 필요)
+      HttpOverrides.global = MyHttpOverrides();
+
+      // 서버 IP 설정 (필요에 따라 변경)
+      const String serverIp = '3.34.214.133'; // 실제 서버 IP로 변경해주세요
+      const String url = 'https://$serverIp/verify/find_account';
+
+      // 요청 데이터 준비
+      final Map<String, String> requestData = {
+        'email': _email ?? '',
+        'code': _verificationCode,
+      };
+
+      developer.log('Sending verification request: $requestData');
+
+      // API 호출
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestData),
+      );
+
+      developer.log('Response status: ${response.statusCode}');
+      developer.log('Response body: ${response.body}');
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+
+        if (responseData['success'] == true) {
+          // 성공 시 결과 페이지로 이동
+          Navigator.pushNamed(
+            context,
+            '/find-id-result',
+            arguments: {
+              'userName': responseData['data']['name'] ?? _userName ?? '',
+              'userId': responseData['data']['account_id'] ?? '',
+            },
+          );
+        } else {
+          // 인증 실패
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('인증번호가 올바르지 않습니다.'),
+                backgroundColor: Color(0xFFFF4258),
+              ),
+            );
+          }
+        }
+      } else {
+        // 서버 오류
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('서버 오류가 발생했습니다. 다시 시도해주세요.'),
+              backgroundColor: Color(0xFFFF4258),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      developer.log('Error during verification: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('네트워크 오류가 발생했습니다. 다시 시도해주세요.'),
+            backgroundColor: Color(0xFFFF4258),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _handleResendCode() {
     // Handle resend code logic here
-    print('Resend code requested');
+    developer.log('Resend code requested');
   }
 
   void _onCodeChanged(String code) {
@@ -95,7 +186,7 @@ class _FindIDVerificationPageState extends State<FindIDVerificationPage> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      '${widget.userName}님, 환영합니다.',
+                      '${_userName ?? ''}님, 환영합니다.',
                       style: const TextStyle(
                         fontFamily: 'Pretendard',
                         fontSize: 24,
@@ -116,7 +207,7 @@ class _FindIDVerificationPageState extends State<FindIDVerificationPage> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      '이메일로 보내드린 4자 코드를 입력해주세요.',
+                      '이메일로 보내드린 6자 코드를 입력해주세요.',
                       style: const TextStyle(
                         fontFamily: 'Pretendard',
                         fontSize: 16,
@@ -137,9 +228,9 @@ class _FindIDVerificationPageState extends State<FindIDVerificationPage> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: VerificationCodeInput(
-                      length: 4,
+                      length: 6,
                       onChanged: _onCodeChanged,
-                      width: 248,
+                      width: 320,
                       height: 50,
                     ),
                   ),
@@ -187,8 +278,8 @@ class _FindIDVerificationPageState extends State<FindIDVerificationPage> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 30),
                   child: NextButton(
-                    text: '다음',
-                    onPressed: _verificationCode.length == 4
+                    text: _isLoading ? '처리 중...' : '다음',
+                    onPressed: (_verificationCode.length == 6 && !_isLoading)
                         ? _handleNext
                         : null,
                   ),
@@ -201,5 +292,15 @@ class _FindIDVerificationPageState extends State<FindIDVerificationPage> {
         ),
       ),
     );
+  }
+}
+
+// 개발 환경에서 SSL 인증서 검증 우회를 위한 클래스
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
   }
 }

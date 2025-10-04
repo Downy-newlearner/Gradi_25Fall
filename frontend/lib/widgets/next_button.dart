@@ -7,12 +7,12 @@ class NextButton extends StatelessWidget {
   final double? height;
 
   const NextButton({
-    Key? key,
+    super.key,
     this.text = '다음',
     this.onPressed,
     this.width,
     this.height,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

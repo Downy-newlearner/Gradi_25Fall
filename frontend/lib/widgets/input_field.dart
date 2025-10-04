@@ -8,9 +8,10 @@ class InputField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final double? width;
   final double? height;
+  final bool isError;
 
   const InputField({
-    Key? key,
+    super.key,
     required this.placeholder,
     this.controller,
     this.obscureText = false,
@@ -18,7 +19,8 @@ class InputField extends StatelessWidget {
     this.onChanged,
     this.width,
     this.height,
-  }) : super(key: key);
+    this.isError = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -28,18 +30,21 @@ class InputField extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFF3F3F3),
         borderRadius: BorderRadius.circular(5),
+        border: isError
+            ? Border.all(color: const Color(0xFFFF4258), width: 1)
+            : null,
       ),
       child: TextField(
         controller: controller,
         obscureText: obscureText,
         keyboardType: keyboardType,
         onChanged: onChanged,
-        style: const TextStyle(
+        style: TextStyle(
           fontFamily: 'Pretendard',
           fontSize: 15,
           fontWeight: FontWeight.w500,
           height: 1.193,
-          color: Color(0xFFA0A0A0),
+          color: isError ? const Color(0xFFFF4258) : const Color(0xFFA0A0A0),
         ),
         decoration: InputDecoration(
           hintText: placeholder,

@@ -7,16 +7,16 @@ class PageTitle extends StatelessWidget {
   final TextAlign? textAlign;
 
   const PageTitle({
-    Key? key,
+    super.key,
     required this.text,
     this.width,
     this.height,
     this.textAlign,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: width,
       child: Text(
         text,

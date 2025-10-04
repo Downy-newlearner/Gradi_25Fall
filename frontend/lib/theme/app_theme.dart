@@ -30,12 +30,10 @@ class AppTheme {
         primary: primaryColor,
         secondary: secondaryColor,
         surface: whiteColor,
-        background: whiteColor,
         error: errorColor,
         onPrimary: whiteColor,
         onSecondary: whiteColor,
         onSurface: textPrimary,
-        onBackground: textPrimary,
         onError: whiteColor,
       ),
 

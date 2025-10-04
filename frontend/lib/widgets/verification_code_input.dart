@@ -8,12 +8,12 @@ class VerificationCodeInput extends StatefulWidget {
   final double? height;
 
   const VerificationCodeInput({
-    Key? key,
+    super.key,
     this.length = 4,
     this.onChanged,
     this.width,
     this.height,
-  }) : super(key: key);
+  });
 
   @override
   State<VerificationCodeInput> createState() => _VerificationCodeInputState();
@@ -64,7 +64,7 @@ class _VerificationCodeInputState extends State<VerificationCodeInput> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: widget.width ?? 248,
       height: widget.height ?? 50,
       child: Row(

@@ -5,16 +5,11 @@ class LinksSection extends StatelessWidget {
   final VoidCallback? onFindID;
   final VoidCallback? onFindPW;
 
-  const LinksSection({
-    Key? key,
-    this.onSignUp,
-    this.onFindID,
-    this.onFindPW,
-  }) : super(key: key);
+  const LinksSection({super.key, this.onSignUp, this.onFindID, this.onFindPW});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: 244,
       height: 17,
       child: Row(
@@ -34,14 +29,14 @@ class LinksSection extends StatelessWidget {
               ),
             ),
           ),
-          
+
           // 구분선 1
-          Container(
+          SizedBox(
             width: 1,
             height: 14,
-            color: const Color(0xFFCBCBCB),
+            child: Container(color: const Color(0xFFCBCBCB)),
           ),
-          
+
           // 아이디 찾기
           GestureDetector(
             onTap: onFindID,
@@ -56,14 +51,14 @@ class LinksSection extends StatelessWidget {
               ),
             ),
           ),
-          
+
           // 구분선 2
-          Container(
+          SizedBox(
             width: 1,
             height: 14,
-            color: const Color(0xFFCBCBCB),
+            child: Container(color: const Color(0xFFCBCBCB)),
           ),
-          
+
           // 비밀번호 찾기
           GestureDetector(
             onTap: onFindPW,
@@ -83,5 +78,3 @@ class LinksSection extends StatelessWidget {
     );
   }
 }
-
-

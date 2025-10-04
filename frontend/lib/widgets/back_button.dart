@@ -5,12 +5,11 @@ class CustomBackButton extends StatelessWidget {
   final double? width;
   final double? height;
 
-  const CustomBackButton({Key? key, this.onPressed, this.width, this.height})
-    : super(key: key);
+  const CustomBackButton({super.key, this.onPressed, this.width, this.height});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: width ?? 38,
       height: height ?? 38,
       child: IconButton(

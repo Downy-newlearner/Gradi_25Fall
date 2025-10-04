@@ -7,12 +7,12 @@ class LoginButton extends StatelessWidget {
   final double? height;
 
   const LoginButton({
-    Key? key,
+    super.key,
     required this.text,
     this.onPressed,
     this.width,
     this.height,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -37,9 +37,7 @@ class LoginButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(5),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
         ),
         child: Text(
           text,
@@ -55,5 +53,3 @@ class LoginButton extends StatelessWidget {
     );
   }
 }
-
-

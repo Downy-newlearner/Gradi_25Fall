@@ -9,9 +9,11 @@ class LabeledInputField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final double? width;
   final double? height;
+  final bool isError;
+  final String? errorMessage;
 
   const LabeledInputField({
-    Key? key,
+    super.key,
     required this.label,
     required this.placeholder,
     this.controller,
@@ -20,11 +22,13 @@ class LabeledInputField extends StatelessWidget {
     this.onChanged,
     this.width,
     this.height,
-  }) : super(key: key);
+    this.isError = false,
+    this.errorMessage,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: width ?? 342,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,18 +55,23 @@ class LabeledInputField extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFF3F3F3),
               borderRadius: BorderRadius.circular(5),
+              border: isError
+                  ? Border.all(color: const Color(0xFFFF4258), width: 1)
+                  : null,
             ),
             child: TextField(
               controller: controller,
               obscureText: obscureText,
               keyboardType: keyboardType,
               onChanged: onChanged,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Pretendard',
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
                 height: 1.193,
-                color: Color(0xFFA0A0A0),
+                color: isError
+                    ? const Color(0xFFFF4258)
+                    : const Color(0xFFA0A0A0),
               ),
               decoration: InputDecoration(
                 hintText: placeholder,
@@ -81,6 +90,21 @@ class LabeledInputField extends StatelessWidget {
               ),
             ),
           ),
+
+          // Error Message
+          if (isError && errorMessage != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              errorMessage!,
+              style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                height: 1.33,
+                color: Color(0xFFFF4258),
+              ),
+            ),
+          ],
         ],
       ),
     );

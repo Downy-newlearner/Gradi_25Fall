@@ -13,7 +13,7 @@ class ErrorInputField extends StatelessWidget {
   final double? height;
 
   const ErrorInputField({
-    Key? key,
+    super.key,
     required this.label,
     required this.placeholder,
     this.controller,
@@ -24,11 +24,11 @@ class ErrorInputField extends StatelessWidget {
     this.hasError = false,
     this.width,
     this.height,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: width ?? 342,
       height: height ?? (hasError ? 102 : 76),
       child: Column(

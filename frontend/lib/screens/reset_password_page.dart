@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:developer' as developer;
+import 'dart:io';
 import '../widgets/back_button.dart' as custom;
 import '../widgets/page_title.dart';
 import '../widgets/labeled_input_field.dart';
@@ -16,6 +19,21 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  bool _isLoading = false;
+  String? _userId;
+  String? _email;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // arguments에서 데이터 추출
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null) {
+      _userId = args['userId'] as String?;
+      _email = args['email'] as String?;
+    }
+  }
 
   @override
   void dispose() {
@@ -28,8 +46,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     Navigator.pop(context);
   }
 
-  void _handleResetPassword() {
-    // TODO: Implement password reset logic
+  void _handleResetPassword() async {
+    // 기본 유효성 검사
     if (_newPasswordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -40,11 +58,96 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       return;
     }
 
-    print('New Password: ${_newPasswordController.text}');
-    print('Confirm Password: ${_confirmPasswordController.text}');
+    if (_newPasswordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('비밀번호를 입력해주세요.'),
+          backgroundColor: Color(0xFFFF4258),
+        ),
+      );
+      return;
+    }
 
-    // Navigate to login page after successful reset
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 개발 환경에서 SSL 인증서 검증 우회 (프로덕션에서는 제거 필요)
+      HttpOverrides.global = MyHttpOverrides();
+
+      // 서버 IP 설정 (필요에 따라 변경)
+      const String serverIp = '3.34.214.133'; // 실제 서버 IP로 변경해주세요
+      const String url = 'https://$serverIp/change-password';
+
+      // 요청 데이터 준비
+      final Map<String, String> requestData = {
+        'user_id': _userId ?? '',
+        'email': _email ?? '',
+        'new_password': _newPasswordController.text,
+      };
+
+      developer.log('Sending password change request: $requestData');
+
+      // API 호출
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(requestData),
+      );
+
+      developer.log('Response status: ${response.statusCode}');
+      developer.log('Response body: ${response.body}');
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+
+        if (responseData['success'] == true) {
+          // 성공 시 로그인 페이지로 이동
+          Navigator.of(
+            context,
+          ).pushNamedAndRemoveUntil('/login', (route) => false);
+        } else {
+          // 실패
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('비밀번호 변경에 실패했습니다.'),
+                backgroundColor: Color(0xFFFF4258),
+              ),
+            );
+          }
+        }
+      } else {
+        // 서버 오류
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('서버 오류가 발생했습니다. 다시 시도해주세요.'),
+              backgroundColor: Color(0xFFFF4258),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      developer.log('Error during password change: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('네트워크 오류가 발생했습니다. 다시 시도해주세요.'),
+            backgroundColor: Color(0xFFFF4258),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -109,7 +212,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                     obscureText: true,
                   ),
                   const SizedBox(height: 40),
-                  NextButton(text: '확인', onPressed: _handleResetPassword),
+                  NextButton(
+                    text: _isLoading ? '처리 중...' : '확인',
+                    onPressed: _isLoading ? null : _handleResetPassword,
+                  ),
                   const SizedBox(height: 60), // Bottom spacing
                 ],
               ),
@@ -118,5 +224,15 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
         ),
       ),
     );
+  }
+}
+
+// 개발 환경에서 SSL 인증서 검증 우회를 위한 클래스
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
   }
 }

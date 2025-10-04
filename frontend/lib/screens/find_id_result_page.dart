@@ -9,16 +9,31 @@ class FindIDResultPage extends StatefulWidget {
   final String userId;
 
   const FindIDResultPage({
-    Key? key,
+    super.key,
     required this.userName,
     required this.userId,
-  }) : super(key: key);
+  });
 
   @override
   State<FindIDResultPage> createState() => _FindIDResultPageState();
 }
 
 class _FindIDResultPageState extends State<FindIDResultPage> {
+  String? _userName;
+  String? _userId;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // arguments에서 데이터 추출
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (args != null) {
+      _userName = args['userName'] as String?;
+      _userId = args['userId'] as String?;
+    }
+  }
+
   void _handleBack() {
     Navigator.of(context).pop();
   }
@@ -69,8 +84,8 @@ class _FindIDResultPageState extends State<FindIDResultPage> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: UserIDCard(
-                      userName: widget.userName,
-                      userId: widget.userId,
+                      userName: _userName ?? widget.userName,
+                      userId: _userId ?? widget.userId,
                       width: 193,
                       height: 58,
                     ),

@@ -6,27 +6,27 @@ class SNSDivider extends StatelessWidget {
   final double? height;
 
   const SNSDivider({
-    Key? key,
+    super.key,
     this.text = 'SNS 간편 로그인',
     this.width,
     this.height,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: width ?? 339,
       height: height ?? 17,
       child: Row(
         children: [
           // Left line
           Expanded(
-            child: Container(
+            child: SizedBox(
               height: 1,
-              color: const Color(0xFFCBCBCB),
+              child: Container(color: const Color(0xFFCBCBCB)),
             ),
           ),
-          
+
           // Text
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -41,12 +41,12 @@ class SNSDivider extends StatelessWidget {
               ),
             ),
           ),
-          
+
           // Right line
           Expanded(
-            child: Container(
+            child: SizedBox(
               height: 1,
-              color: const Color(0xFFCBCBCB),
+              child: Container(color: const Color(0xFFCBCBCB)),
             ),
           ),
         ],
@@ -54,5 +54,3 @@ class SNSDivider extends StatelessWidget {
     );
   }
 }
-
-
