@@ -100,3 +100,5 @@ temp/
 # video
 *.mp4
 *.mov
+# Cursor (local AI assistant rules and cache)
+.cursor/
