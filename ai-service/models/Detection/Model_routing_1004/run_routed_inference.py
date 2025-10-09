@@ -150,6 +150,52 @@ class RoutedInference:
         
         # 이미지 저장
         cv2.imwrite(str(output_path), image)
+        
+    def crop_and_save_detections(self, image_path: str, detections: List[Dict], output_dir: Path):
+        """각 검출 결과 개별 이미지로 크롭하여 저장"""
+        # 이미지 로드
+        image = cv2.imread(str(image_path))
+        if image is None:
+            print(f"❌ 이미지 로드 실패: {image_path}")
+            return
+    
+        image_name = Path(image_path).stem
+    
+        # 클래스별 카운터
+        class_counters = {}
+    
+        for det in detections:
+            class_name = det['class_name']
+            confidence = det['confidence']
+            bbox = det['bbox']
+        
+            # 바운딩 박스 좌표
+            x1, y1, x2, y2 = map(int, bbox)
+        
+            # 좌표 보정
+            h, w = image.shape[:2]
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(w, x2), min(h, y2)
+        
+            if x2 <= x1 or y2 <= y1:
+                continue
+        
+            # 크롭
+            cropped = image[y1:y2, x1:x2]
+        
+            # 클래스별 폴더 생성
+            class_dir = output_dir / image_name / class_name
+            class_dir.mkdir(parents=True, exist_ok=True)
+        
+            # 카운터 증가
+            if class_name not in class_counters:
+                class_counters[class_name] = 0
+            else:
+                class_counters[class_name] += 1
+        
+            # 파일명 생성 및 저장
+            crop_filename = f"{class_name}_{class_counters[class_name]:02d}_conf{confidence:.3f}.jpg"
+            cv2.imwrite(str(class_dir / crop_filename), cropped)
     
     def add_legend(self, image):
         """범례 추가"""
@@ -176,7 +222,7 @@ class RoutedInference:
         (output_path / "annotations").mkdir(parents=True, exist_ok=True)
         
         # 테스트 이미지 목록 가져오기
-        test_images_dir = test_data_path / "test" / "images"
+        test_images_dir = test_data_path 
         if not test_images_dir.exists():
             print(f"❌ 테스트 이미지 디렉토리를 찾을 수 없습니다: {test_images_dir}")
             return
@@ -208,6 +254,10 @@ class RoutedInference:
             # 시각화 이미지 저장
             output_image_path = output_path / "images" / f"routed_result_{image_path.stem}.jpg"
             self.visualize_detections(str(image_path), result['detections'], str(output_image_path))
+            
+            # 크롭된 이미지 저장 추가 
+            detailed_output_dir = output_path / "detailed_images"
+            self.crop_and_save_detections(str(image_path), result['detections'], detailed_output_dir)
             
             # JSON 저장
             output_json_path = output_path / "annotations" / f"routed_result_{image_path.stem}.json"
@@ -259,13 +309,13 @@ class RoutedInference:
         print(f"  - 검출 데이터: {output_path}/annotations/")
         print(f"  - 결과 요약: {output_path}/routing_results_summary.json")
         
-        return summary
+        return all_results #summary에서 수정
 
 
 def main():
     # 경로 설정
     current_dir = Path(__file__).parent
-    test_data_root = current_dir.parent.parent / "Data" / "english_large4_251004"  # 테스트용
+    test_data_root = current_dir.parent.parent / "recognition" / "exp_images"
     output_dir = current_dir / "routed_inference_results"
     
     print("🚀 라우팅 추론 시작")
