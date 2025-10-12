@@ -1,7 +1,7 @@
 import easyocr
 import re
 
-class EasyOCRModel:
+class OCRModel:
     def __init__(self):
         self.reader = easyocr.Reader(['en'], gpu=False)
     

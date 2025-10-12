@@ -1,13 +1,13 @@
-# 계층적 크롭 파이프라인
-## 순차 처리 페이지 번호 → Section → 문제 번호 및 정답
+# hierarchical_crop.py
+# 계층적 크롭 파이프라인 클래스
 
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import cv2
 import numpy as np
 from models.Detection.Model_routing_1004.run_routed_inference import RoutedInference
-from models.Recognition.ocr import EasyOCRModel
+from models.Recognition.ocr import OCRModel
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,23 +17,29 @@ logger = logging.getLogger(__name__)
 
 
 class HierarchicalCropPipeline:
-    """계층적 크롭 파이프라인: 페이지 → Section → 문제번호 및 정답"""
+    """계층적 크롭 파이프라인: 페이지 → Section → 문제번호 및 정답 (OCR 포함)"""
     
     def __init__(self, model_dir: str):
         self.router = RoutedInference(model_dir)
-        logger.info("HierarchicalCropPipeline 초기화")
+        self.ocr = OCRModel()
+        logger.info("HierarchicalCropPipeline 초기화 (OCR 모델 로드 완료)")
     
-    def crop_page_number(self, image_path: str, detections: List[Dict], output_dir: Path) -> str:
+    def crop_page_number(self, image_path: str, detections: List[Dict], output_dir: Path) -> Tuple[Optional[str], Optional[str]]:
+        """페이지 번호를 크롭하고 OCR로 인식
+        
+        Returns:
+            Tuple[Optional[str], Optional[str]]: (크롭 이미지 경로, 인식된 페이지 번호)
+        """
         image = cv2.imread(image_path)
         if image is None:
             logger.error(f"이미지 로드 실패: {image_path}")
-            return None
+            return None, None
         
         page_num_detections = [d for d in detections if d['class_name'] == 'page_number']
         
         if not page_num_detections:
             logger.warning(f"페이지 번호 미검출: {image_path}")
-            return None
+            return None, None
         
         # 신뢰도 가장 높은 것 선택
         best_det = max(page_num_detections, key=lambda x: x['confidence'])
@@ -45,7 +51,7 @@ class HierarchicalCropPipeline:
         
         if x2 <= x1 or y2 <= y1:
             logger.warning(f"잘못된 페이지 번호 박스: {best_det['bbox']}")
-            return None
+            return None, None
         
         # 크롭 및 저장
         cropped = image[y1:y2, x1:x2]
@@ -56,13 +62,23 @@ class HierarchicalCropPipeline:
         save_path = page_num_dir / f"{image_name}_page_number.jpg"
         cv2.imwrite(str(save_path), cropped)
         
+        # OCR로 페이지 번호 인식
+        recognized_number = self.ocr.extract_number(str(save_path))
+        
         logger.info(f"페이지 번호 crop 완료: {save_path}")
-        return str(save_path)
+        logger.info(f"페이지 번호 OCR 결과: '{recognized_number}'")
+        
+        return str(save_path), recognized_number
     
 
     def process_single_section(self, original_image_path: str, section_idx: int, 
                                page_name: str, output_dir: Path, 
                                section_bbox: List[float], all_detections: List[Dict]) -> Dict:
+        """섹션 내의 문제번호와 정답을 크롭하고 OCR 수행
+        
+        Returns:
+            Dict: 섹션 처리 결과 (문제번호 경로 및 OCR 결과 포함)
+        """
         
         # 해당 section 내부에 있는 문제번호 및 정답만 필터링
         sx1, sy1, sx2, sy2 = section_bbox
@@ -70,7 +86,6 @@ class HierarchicalCropPipeline:
         
         for det in all_detections:
             dx1, dy1, dx2, dy2 = det['bbox']
-
             center_x = (dx1 + dx2) / 2
             center_y = (dy1 + dy2) / 2
             
@@ -87,14 +102,17 @@ class HierarchicalCropPipeline:
         section_result = {
             'section_idx': section_idx,
             'problem_numbers': [],
+            'problem_numbers_ocr': [],  # OCR 결과 추가
             'answers': []
         }
         
         section_output_dir = output_dir / page_name / f"section_{section_idx:02d}"
         section_output_dir.mkdir(parents=True, exist_ok=True)
         
-        # 문제 번호 crop
+        # 문제 번호 crop 및 OCR
         problem_num_dets = [d for d in detections if d['class_name'] == 'problem_number']
+        logger.info(f"Section {section_idx}: {len(problem_num_dets)}개 문제번호 검출")
+        
         for i, det in enumerate(problem_num_dets):
             x1, y1, x2, y2 = map(int, det['bbox'])
             h, w = image.shape[:2]
@@ -107,7 +125,18 @@ class HierarchicalCropPipeline:
             cropped = image[y1:y2, x1:x2]
             save_path = section_output_dir / f"problem_number_{i:02d}_conf{det['confidence']:.2f}.jpg"
             cv2.imwrite(str(save_path), cropped)
+            
+            # OCR로 문제 번호 인식
+            recognized_number = self.ocr.extract_number(str(save_path))
+            
             section_result['problem_numbers'].append(str(save_path))
+            section_result['problem_numbers_ocr'].append({
+                'path': str(save_path),
+                'number': recognized_number,
+                'confidence': det['confidence']
+            })
+            
+            logger.info(f"  문제번호 {i}: OCR='{recognized_number}' (conf={det['confidence']:.2f})")
         
         # 정답 crop (answer_1, answer_2)
         answer_classes = ['answer_1', 'answer_2']
@@ -131,7 +160,15 @@ class HierarchicalCropPipeline:
         return section_result
     
     def process_page(self, image_path: str, output_dir: Path) -> Dict:
-        """전체 파이프라인(한 페이지 처리)"""
+        """전체 파이프라인(한 페이지 처리)
+        
+        Args:
+            image_path: 입력 이미지 경로
+            output_dir: 출력 디렉토리
+            
+        Returns:
+            Dict: 페이지 처리 결과
+        """
 
         logger.info(f"\n{'='*60}")
         logger.info(f"페이지 처리 시작: {Path(image_path).name}")
@@ -149,13 +186,15 @@ class HierarchicalCropPipeline:
             'image_path': image_path,
             'page_name': page_name,
             'page_number_path': None,
+            'page_number_ocr': None,  # OCR 결과 추가
             'sections': []
         }
         
-        # 1단계: 페이지 번호 crop
-        logger.info("\n1. 페이지 번호 crop")
-        page_num_path = self.crop_page_number(image_path, detections, page_output_dir)
+        # 1단계: 페이지 번호 crop 및 OCR
+        logger.info("\n1. 페이지 번호 crop 및 OCR")
+        page_num_path, page_num_ocr = self.crop_page_number(image_path, detections, page_output_dir)
         page_result['page_number_path'] = page_num_path
+        page_result['page_number_ocr'] = page_num_ocr
         
         # 2단계: Section crop
         logger.info("\n2. Section crop")
@@ -186,8 +225,8 @@ class HierarchicalCropPipeline:
         
         logger.info(f"총 {len(section_info)}개 Section 검출됨")
         
-        # 3-4단계: 각 Section 처리
-        logger.info("\n3. 각 Section에서 문제번호 및 정답 crop")
+        # 3-4단계: 각 Section 처리 (문제번호 OCR 포함)
+        logger.info("\n3. 각 Section에서 문제번호 및 정답 crop (OCR 수행)")
         for section_path, section_idx, section_bbox in section_info:
             section_result = self.process_single_section(
                 image_path, section_idx, page_name, output_dir,
@@ -196,55 +235,8 @@ class HierarchicalCropPipeline:
             page_result['sections'].append(section_result)
 
         logger.info(f"\n페이지 '{page_name}' 처리 완료")
-        logger.info(f"  - 페이지 번호: {page_num_path}")
+        logger.info(f"  - 페이지 번호: {page_num_ocr}")
         logger.info(f"  - Section 수: {len(section_info)}")
         logger.info(f"  - 출력 디렉토리: {page_output_dir}")
         
         return page_result
-
-
-def main():
-
-    current_dir = Path(__file__).parent
-    
-    input_images_dir = current_dir.parent / "recognition" / "exp_images"
-    output_dir = current_dir / "hierarchical_results"
-    model_dir = current_dir / "Model_routing_1004"
-    
-    logger.info("계층적 크롭 파이프라인 시작")
-    logger.info(f"입력 디렉토리: {input_images_dir}")
-    logger.info(f"출력 디렉토리: {output_dir}")
-    logger.info(f"모델 디렉토리: {model_dir}")
-    
-    pipeline = HierarchicalCropPipeline(str(model_dir))
-    
-    image_extensions = ['.jpg', '.jpeg', '.png', '.bmp']
-    image_files = []
-    for ext in image_extensions:
-        image_files.extend(input_images_dir.glob(f"*{ext}"))
-        image_files.extend(input_images_dir.glob(f"*{ext.upper()}"))
-    
-    image_files = sorted(image_files)
-    logger.info(f"\n처리할 이미지: {len(image_files)}개")
-
-    # 각 이미지 처리
-    all_results = []
-    for idx, image_path in enumerate(image_files):
-        logger.info(f"\n\n[{idx+1}/{len(image_files)}] 처리")
-        result = pipeline.process_page(str(image_path), output_dir)
-        all_results.append(result)
-    
-    logger.info("\n\n" + "="*60)
-    logger.info("전체 처리 결과 요약")
-    logger.info("="*60)
-    
-    total_sections = sum(len(r['sections']) for r in all_results)
-    logger.info(f"처리된 페이지: {len(all_results)}개")
-    logger.info(f"총 Section 수: {total_sections}개")
-    logger.info(f"출력 위치: {output_dir}")
-
-    logger.info("\n모든 작업이 완료되었습니다.")
-
-
-if __name__ == "__main__":
-    main()
