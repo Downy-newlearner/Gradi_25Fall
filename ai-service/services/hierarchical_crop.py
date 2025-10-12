@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 import cv2
 import numpy as np
-from Model_routing_1004.run_routed_inference import RoutedInference
+from models.Detection.Model_routing_1004.run_routed_inference import RoutedInference
+from models.Recognition.ocr import EasyOCRModel
 
 logging.basicConfig(
     level=logging.INFO,
