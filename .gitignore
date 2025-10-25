@@ -90,3 +90,6 @@ secrets/
 tmp/
 temp/
 *.tmp
+
+# Cursor (local AI assistant rules and cache)
+.cursor/
