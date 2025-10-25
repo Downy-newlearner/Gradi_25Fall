@@ -20,6 +20,16 @@ import '../screens/academy/academy_page.dart';
 import '../screens/academy/academy_list_page.dart';
 import '../screens/academy/academy_detail_page.dart';
 import '../screens/workbook/workbook_page.dart';
+import '../screens/workbook/workbook_detail_page.dart';
+import '../screens/workbook/chapter_detail_page.dart';
+import '../screens/workbook/question_detail_page.dart';
+import '../screens/mypage/mypage.dart';
+import '../screens/mypage/display_settings_page.dart';
+import '../screens/mypage/homework_status_page.dart';
+import '../screens/mypage/learning_statistics_page.dart';
+import '../screens/mypage/account_management_page.dart';
+import '../screens/mypage/academy_management_page.dart';
+import '../screens/mypage/notification_settings_page.dart';
 
 class AppRoutes {
   static const String mainNavigation = '/';
@@ -32,6 +42,16 @@ class AppRoutes {
   static const String academyList = '/academy/list';
   static const String academyDetail = '/academy/detail';
   static const String workbook = '/workbook';
+  static const String workbookDetail = '/workbook/detail';
+  static const String chapterDetail = '/workbook/chapter-detail';
+  static const String questionDetail = '/workbook/question-detail';
+  static const String mypage = '/mypage';
+  static const String displaySettings = '/mypage/display-settings';
+  static const String homeworkStatus = '/mypage/homework-status';
+  static const String learningStatistics = '/mypage/learning-statistics';
+  static const String accountManagement = '/mypage/account-management';
+  static const String academyManagement = '/mypage/academy-management';
+  static const String notificationSettings = '/mypage/notification-settings';
   static const String findId = '/find-id';
   static const String findIdError = '/find-id-error';
   static const String findIdVerification = '/find-id-verification';
@@ -54,6 +74,13 @@ class AppRoutes {
     academy: (context) => const AcademyPage(),
     academyList: (context) => const AcademyListPage(),
     workbook: (context) => const WorkbookPage(),
+    mypage: (context) => const MyPage(),
+    displaySettings: (context) => const DisplaySettingsPage(),
+    homeworkStatus: (context) => const HomeworkStatusPage(),
+    learningStatistics: (context) => const LearningStatisticsPage(),
+    accountManagement: (context) => const AccountManagementPage(),
+    academyManagement: (context) => const AcademyManagementPage(),
+    notificationSettings: (context) => const NotificationSettingsPage(),
     findId: (context) => const FindIDPage(),
     findIdError: (context) => const FindIDErrorPage(),
     findPassword: (context) => const FindPasswordPage(),
@@ -105,6 +132,43 @@ class AppRoutes {
         }
         return MaterialPageRoute(
           builder: (context) => AcademyDetailPage(academy: args),
+        );
+      case workbookDetail:
+        final args = settings.arguments as Map<String, dynamic>?;
+        if (args == null) {
+          return null;
+        }
+        return MaterialPageRoute(
+          builder: (context) => WorkbookDetailPage(
+            workbookName: args['workbookName'] as String,
+            thumbnailPath: args['thumbnailPath'] as String,
+          ),
+        );
+      case chapterDetail:
+        final args = settings.arguments as Map<String, dynamic>?;
+        if (args == null) {
+          return null;
+        }
+        return MaterialPageRoute(
+          builder: (context) => ChapterDetailPage(
+            workbookName: args['workbookName'] as String,
+            chapterName: args['chapterName'] as String,
+            solvedCount: args['solvedCount'] as int,
+            totalCount: args['totalCount'] as int,
+          ),
+        );
+      case questionDetail:
+        final args = settings.arguments as Map<String, dynamic>?;
+        if (args == null) {
+          return null;
+        }
+        return MaterialPageRoute(
+          builder: (context) => QuestionDetailPage(
+            workbookName: args['workbookName'] as String,
+            chapterName: args['chapterName'] as String,
+            questionNumber: args['questionNumber'] as int,
+            status: args['status'] as QuestionStatus,
+          ),
         );
       default:
         return null;

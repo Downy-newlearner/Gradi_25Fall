@@ -3,6 +3,7 @@ import '../widgets/bottom_navigation_widget.dart';
 import 'home_page.dart';
 import 'workbook/workbook_page.dart';
 import 'academy/academy_page.dart';
+import 'mypage/mypage.dart';
 
 class MainNavigationPage extends StatefulWidget {
   const MainNavigationPage({super.key});
@@ -20,7 +21,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     const WorkbookPage(),
     const PlaceholderPage(title: '이미지업로드'),
     const AcademyPage(),
-    const PlaceholderPage(title: '마이페이지'),
+    const MyPage(),
     const PlaceholderPage(title: '알람'),
   ];
 

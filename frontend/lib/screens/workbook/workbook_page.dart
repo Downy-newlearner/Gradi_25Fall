@@ -354,53 +354,66 @@ class _WorkbookPageState extends State<WorkbookPage> {
     final thumbnailWidth = screenWidth * 0.15; // 화면 너비의 15%
     final thumbnailHeight = thumbnailWidth * 1.33; // 3:4 비율 유지
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 문제집 썸네일
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            width: thumbnailWidth,
-            height: thumbnailHeight,
-            color: const Color(0xFFE9ECEF),
-            child: Image.asset(
-              workbook.thumbnailPath,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return const Center(
-                  child: Icon(Icons.book, color: Color(0xFF999999)),
-                );
-              },
+    return GestureDetector(
+      onTap: () {
+        // WorkbookDetailPage로 이동
+        Navigator.pushNamed(
+          context,
+          '/workbook/detail',
+          arguments: {
+            'workbookName': workbook.name,
+            'thumbnailPath': workbook.thumbnailPath,
+          },
+        );
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 문제집 썸네일
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              width: thumbnailWidth,
+              height: thumbnailHeight,
+              color: const Color(0xFFE9ECEF),
+              child: Image.asset(
+                workbook.thumbnailPath,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Center(
+                    child: Icon(Icons.book, color: Color(0xFF999999)),
+                  );
+                },
+              ),
             ),
           ),
-        ),
-        Container(height: MediaQuery.of(context).size.height * 0.01),
-        // 진행률 바
-        SizedBox(
-          width: thumbnailWidth,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              height: 6,
-              decoration: const BoxDecoration(color: Color(0xFFE9ECEF)),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: workbook.progress / 100,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFAC5BF8), Color(0xFF7C3AED)],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
+          Container(height: MediaQuery.of(context).size.height * 0.01),
+          // 진행률 바
+          SizedBox(
+            width: thumbnailWidth,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                height: 6,
+                decoration: const BoxDecoration(color: Color(0xFFE9ECEF)),
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: workbook.progress / 100,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFAC5BF8), Color(0xFF7C3AED)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -423,132 +436,148 @@ class _WorkbookPageState extends State<WorkbookPage> {
   }
 
   Widget _buildWorkbookCard(WorkbookData workbookData) {
-    return Container(
-      padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE9ECEF)),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(13),
-            offset: const Offset(0, 2),
-            blurRadius: 8,
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 문제집 썸네일
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.18,
-                minWidth: 60,
-                maxHeight: MediaQuery.of(context).size.width * 0.23,
-                minHeight: 80,
-              ),
-              color: const Color(0xFFE74C3C),
-              child: Image.asset(
-                workbookData.thumbnailPath,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Center(
-                    child: Text(
-                      'blacklabel',
-                      style: TextStyle(
-                        fontFamily: 'Pretendard',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 10,
-                        color: Colors.white,
+    return GestureDetector(
+      onTap: () {
+        // WorkbookDetailPage로 이동
+        Navigator.pushNamed(
+          context,
+          '/workbook/detail',
+          arguments: {
+            'workbookName': workbookData.workbookName,
+            'thumbnailPath': workbookData.thumbnailPath,
+          },
+        );
+      },
+      child: Container(
+        padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFE9ECEF)),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withAlpha(13),
+              offset: const Offset(0, 2),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 문제집 썸네일
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.18,
+                  minWidth: 60,
+                  maxHeight: MediaQuery.of(context).size.width * 0.23,
+                  minHeight: 80,
+                ),
+                color: const Color(0xFFE74C3C),
+                child: Image.asset(
+                  workbookData.thumbnailPath,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Center(
+                      child: Text(
+                        'blacklabel',
+                        style: TextStyle(
+                          fontFamily: 'Pretendard',
+                          fontWeight: FontWeight.w700,
+                          fontSize: 10,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
-          ),
 
-          Container(width: MediaQuery.of(context).size.width * 0.04),
+            Container(width: MediaQuery.of(context).size.width * 0.04),
 
-          // 문제집 정보
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 문제집명
-                Text(
-                  workbookData.workbookName,
-                  style: const TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                    color: Color(0xFF333333),
+            // 문제집 정보
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 문제집명
+                  Text(
+                    workbookData.workbookName,
+                    style: const TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      color: Color(0xFF333333),
+                    ),
                   ),
-                ),
 
-                Container(height: MediaQuery.of(context).size.height * 0.01),
+                  Container(height: MediaQuery.of(context).size.height * 0.01),
 
-                // 학습 정보
-                Text(
-                  '${workbookData.className}에서 진행 중',
-                  style: const TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontWeight: FontWeight.w400,
-                    fontSize: 12,
-                    color: Color(0xFF666666),
+                  // 학습 정보
+                  Text(
+                    '${workbookData.className}에서 진행 중',
+                    style: const TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontWeight: FontWeight.w400,
+                      fontSize: 12,
+                      color: Color(0xFF666666),
+                    ),
                   ),
-                ),
 
-                Container(height: MediaQuery.of(context).size.height * 0.005),
+                  Container(height: MediaQuery.of(context).size.height * 0.005),
 
-                // 마지막 학습일
-                Text(
-                  '마지막 학습 일 ${workbookData.lastStudyDate}',
-                  style: const TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontWeight: FontWeight.w400,
-                    fontSize: 12,
-                    color: Color(0xFF999999),
+                  // 마지막 학습일
+                  Text(
+                    '마지막 학습 일 ${workbookData.lastStudyDate}',
+                    style: const TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontWeight: FontWeight.w400,
+                      fontSize: 12,
+                      color: Color(0xFF999999),
+                    ),
                   ),
-                ),
 
-                Container(height: MediaQuery.of(context).size.height * 0.015),
+                  Container(height: MediaQuery.of(context).size.height * 0.015),
 
-                // 진행률
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFE9ECEF),
-                        ),
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: workbookData.progress / 100,
-                          child: Container(
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [Color(0xFFAC5BF8), Color(0xFF7C3AED)],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
+                  // 진행률
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFE9ECEF),
+                          ),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: workbookData.progress / 100,
+                            child: Container(
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Color(0xFFAC5BF8),
+                                    Color(0xFF7C3AED),
+                                  ],
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
