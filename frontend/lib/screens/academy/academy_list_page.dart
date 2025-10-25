@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/back_button.dart';
 
 class AcademyListPage extends StatefulWidget {
   const AcademyListPage({super.key});
@@ -198,14 +199,20 @@ class _AcademyListPageState extends State<AcademyListPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text(
-            '학원 등록하기',
-            style: TextStyle(
-              fontFamily: 'Pretendard',
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-              color: Color(0xFF333333),
-            ),
+          Row(
+            children: [
+              const CustomBackButton(),
+              const SizedBox(width: 20),
+              const Text(
+                '학원 등록하기',
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontWeight: FontWeight.w700,
+                  fontSize: 20,
+                  color: Color(0xFF333333),
+                ),
+              ),
+            ],
           ),
           IconButton(
             icon: const Icon(Icons.menu, color: Color(0xFF333333)),

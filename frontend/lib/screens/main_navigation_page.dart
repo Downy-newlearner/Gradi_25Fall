@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../widgets/bottom_navigation_widget.dart';
 import 'home_page.dart';
-import 'workbook_page.dart';
-import 'academy_list_page.dart';
+import 'workbook/workbook_page.dart';
+import 'academy/academy_page.dart';
 
 class MainNavigationPage extends StatefulWidget {
   const MainNavigationPage({super.key});
@@ -19,7 +19,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     const HomePage(),
     const WorkbookPage(),
     const PlaceholderPage(title: '이미지업로드'),
-    const AcademyListPage(),
+    const AcademyPage(),
     const PlaceholderPage(title: '마이페이지'),
     const PlaceholderPage(title: '알람'),
   ];

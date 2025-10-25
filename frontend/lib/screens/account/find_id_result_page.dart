@@ -79,7 +79,7 @@ class _FindIDResultPageState extends State<FindIDResultPage> {
                       userId: _userId ?? widget.userId,
                     ),
 
-                    const Expanded(child: SizedBox()), // Push button to bottom
+                    const SizedBox(height: 100), // Spacing before button
                     // Login Button
                     Padding(
                       padding: const EdgeInsets.only(bottom: 29),

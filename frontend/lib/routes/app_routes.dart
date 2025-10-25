@@ -16,9 +16,10 @@ import '../screens/account/find_password_verification_page.dart';
 import '../screens/account/find_password_reset_page.dart';
 import '../screens/main_navigation_page.dart';
 import '../screens/home_page.dart';
-import '../screens/academy_list_page.dart';
-import '../screens/academy_detail_page.dart';
-import '../screens/workbook_page.dart';
+import '../screens/academy/academy_page.dart';
+import '../screens/academy/academy_list_page.dart';
+import '../screens/academy/academy_detail_page.dart';
+import '../screens/workbook/workbook_page.dart';
 
 class AppRoutes {
   static const String mainNavigation = '/';
@@ -28,6 +29,7 @@ class AppRoutes {
   static const String signupSuccess = '/signup-success';
   static const String home = '/home';
   static const String academy = '/academy';
+  static const String academyList = '/academy/list';
   static const String academyDetail = '/academy/detail';
   static const String workbook = '/workbook';
   static const String findId = '/find-id';
@@ -49,7 +51,8 @@ class AppRoutes {
     signupTerms: (context) => const SignUpTermsPage(),
     signupSuccess: (context) => const SignUpSuccessPage(),
     home: (context) => const HomePage(),
-    academy: (context) => const AcademyListPage(),
+    academy: (context) => const AcademyPage(),
+    academyList: (context) => const AcademyListPage(),
     workbook: (context) => const WorkbookPage(),
     findId: (context) => const FindIDPage(),
     findIdError: (context) => const FindIDErrorPage(),
