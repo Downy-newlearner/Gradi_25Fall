@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../widgets/back_button.dart';
+import '../../widgets/back_button.dart';
 
 class AcademyListPage extends StatefulWidget {
   const AcademyListPage({super.key});
@@ -252,7 +252,7 @@ class _AcademyListPageState extends State<AcademyListPage> {
           ),
           prefixIcon: Icon(Icons.search, color: Color(0xFF666666), size: 23),
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
+          contentPadding: EdgeInsets.symmetric(
             horizontal: 22,
             vertical: 11,
           ),

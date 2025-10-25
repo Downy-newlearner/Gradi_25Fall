@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../widgets/continuous_learning_widget.dart';
+import '../../widgets/continuous_learning_widget.dart';
 
 enum WorkbookViewType {
   byClass, // 클래스 순
