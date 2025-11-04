@@ -2,12 +2,13 @@
 # 계층적 크롭 파이프라인 클래스
 
 import logging
+import time
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import cv2
 import numpy as np
-from models.Detection.Model_routing_1004.run_routed_inference import RoutedInference
-from models.Recognition.ocr import OCRModel
+from models.Detection.Model_routing_1104.run_routed_inference import RoutedInference
+from models.recognition.ocr import OCRModel
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,6 +24,43 @@ class HierarchicalCropPipeline:
         self.router = RoutedInference(model_dir)
         self.ocr = OCRModel()
         logger.info("HierarchicalCropPipeline 초기화 (OCR 모델 로드 완료)")
+    
+    def calculate_iou(self, bbox1: List[float], bbox2: List[float]) -> float:
+        """두 바운딩 박스의 IoU(Intersection over Union) 계산
+        
+        Args:
+            bbox1: [x1, y1, x2, y2]
+            bbox2: [x1, y1, x2, y2]
+            
+        Returns:
+            float: IoU 값 (0.0 ~ 1.0)
+        """
+        x1_1, y1_1, x2_1, y2_1 = bbox1
+        x1_2, y1_2, x2_2, y2_2 = bbox2
+        
+        # 겹치는 영역 계산
+        x1_i = max(x1_1, x1_2)
+        y1_i = max(y1_1, y1_2)
+        x2_i = min(x2_1, x2_2)
+        y2_i = min(y2_1, y2_2)
+        
+        if x2_i <= x1_i or y2_i <= y1_i:
+            return 0.0
+        
+        # Intersection 면적
+        intersection = (x2_i - x1_i) * (y2_i - y1_i)
+        
+        # 각 박스의 면적
+        area1 = (x2_1 - x1_1) * (y2_1 - y1_1)
+        area2 = (x2_2 - x1_2) * (y2_2 - y1_2)
+        
+        # Union 면적
+        union = area1 + area2 - intersection
+        
+        if union == 0:
+            return 0.0
+        
+        return intersection / union
     
     def crop_page_number(self, image_path: str, detections: List[Dict], output_dir: Path) -> Tuple[Optional[str], Optional[str]]:
         """페이지 번호를 크롭하고 OCR로 인식
@@ -93,6 +131,15 @@ class HierarchicalCropPipeline:
                 if det['class_name'] in ['problem_number', 'answer_1', 'answer_2', '1', '2', '3', '4', '5']:
                     detections.append(det)
         
+        # 클래스별로 신뢰도가 가장 높은 것만 선택
+        filtered_detections = {}
+        for det in detections:
+            class_name = det['class_name']
+            if class_name not in filtered_detections or det['confidence'] > filtered_detections[class_name]['confidence']:
+                filtered_detections[class_name] = det
+        
+        detections = list(filtered_detections.values())
+        
         # 원본 페이지 이미지 로드
         image = cv2.imread(original_image_path)
         if image is None:
@@ -108,11 +155,17 @@ class HierarchicalCropPipeline:
             'class_2': [],  # 새로운 클래스 2
             'class_3': [],  # 새로운 클래스 3
             'class_4': [],  # 새로운 클래스 4
-            'class_5': []   # 새로운 클래스 5
+            'class_5': [],  # 새로운 클래스 5
+            'coordinate_mapping': None  # coordinate mapping 이미지 경로
         }
         
         section_output_dir = output_dir / page_name / f"section_{section_idx:02d}"
         section_output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # answer_2 존재 여부 확인
+        has_answer_2 = any(d['class_name'] == 'answer_2' for d in detections)
+        
+        logger.info(f"Section {section_idx}: answer_2 {'존재' if has_answer_2 else '없음'}")
         
         # 문제 번호 crop 및 OCR
         problem_num_dets = [d for d in detections if d['class_name'] == 'problem_number']
@@ -143,29 +196,12 @@ class HierarchicalCropPipeline:
             
             logger.info(f"  문제번호 {i}: OCR='{recognized_number}' (conf={det['confidence']:.2f})")
         
-        # 정답 crop (answer_1, answer_2)
-        answer_classes = ['answer_1', 'answer_2']
-        for ans_class in answer_classes:
-            ans_dets = [d for d in detections if d['class_name'] == ans_class]
-            for i, det in enumerate(ans_dets):
-                x1, y1, x2, y2 = map(int, det['bbox'])
-                h, w = image.shape[:2]
-                x1, y1 = max(0, x1), max(0, y1)
-                x2, y2 = min(w, x2), min(h, y2)
-                
-                if x2 <= x1 or y2 <= y1:
-                    continue
-                
-                cropped = image[y1:y2, x1:x2]
-                save_path = section_output_dir / f"{ans_class}_{i:02d}_conf{det['confidence']:.2f}.jpg"
-                cv2.imwrite(str(save_path), cropped)
-                section_result['answers'].append(str(save_path))
-        
         # 새로운 클래스 1~5 crop
         new_classes = ['1', '2', '3', '4', '5']
+        new_class_detections = {}
+        
         for new_class in new_classes:
             new_class_dets = [d for d in detections if d['class_name'] == new_class]
-            logger.info(f"Section {section_idx}: {len(new_class_dets)}개 클래스 '{new_class}' 검출")
             
             for i, det in enumerate(new_class_dets):
                 x1, y1, x2, y2 = map(int, det['bbox'])
@@ -181,7 +217,84 @@ class HierarchicalCropPipeline:
                 cv2.imwrite(str(save_path), cropped)
                 section_result[f'class_{new_class}'].append(str(save_path))
                 
-                logger.info(f"  클래스 {new_class} {i}: crop 완료 (conf={det['confidence']:.2f})")
+                # 나중에 IoU 계산을 위해 저장
+                new_class_detections[new_class] = {
+                    'det': det,
+                    'crop_path': str(save_path)
+                }
+                
+                logger.info(f"  클래스 {new_class}: crop 완료 (conf={det['confidence']:.2f})")
+        
+        # 정답 crop (answer_1, answer_2)
+        if has_answer_2:
+            # answer_2가 있으면 일반적으로 크롭
+            answer_classes = ['answer_1', 'answer_2']
+            for ans_class in answer_classes:
+                ans_dets = [d for d in detections if d['class_name'] == ans_class]
+                for i, det in enumerate(ans_dets):
+                    x1, y1, x2, y2 = map(int, det['bbox'])
+                    h, w = image.shape[:2]
+                    x1, y1 = max(0, x1), max(0, y1)
+                    x2, y2 = min(w, x2), min(h, y2)
+                    
+                    if x2 <= x1 or y2 <= y1:
+                        continue
+                    
+                    cropped = image[y1:y2, x1:x2]
+                    save_path = section_output_dir / f"{ans_class}_{i:02d}_conf{det['confidence']:.2f}.jpg"
+                    cv2.imwrite(str(save_path), cropped)
+                    section_result['answers'].append(str(save_path))
+                    logger.info(f"  {ans_class} crop 완료")
+        else:
+            # answer_2가 없으면 answer_1과 class 1~5의 IoU 계산
+            answer_1_dets = [d for d in detections if d['class_name'] == 'answer_1']
+            
+            if answer_1_dets and new_class_detections:
+                answer_1_det = answer_1_dets[0]
+                answer_1_bbox = answer_1_det['bbox']
+                
+                # 각 class 1~5와 IoU 계산
+                iou_scores = {}
+                for class_name, class_data in new_class_detections.items():
+                    class_bbox = class_data['det']['bbox']
+                    iou = self.calculate_iou(answer_1_bbox, class_bbox)
+                    iou_scores[class_name] = {
+                        'iou': iou,
+                        'crop_path': class_data['crop_path']
+                    }
+                    logger.info(f"  answer_1과 class_{class_name}의 IoU: {iou:.4f}")
+                
+                # 가장 높은 IoU를 가진 클래스 선택
+                if iou_scores:
+                    best_class = max(iou_scores.items(), key=lambda x: x[1]['iou'])
+                    best_class_name = best_class[0]
+                    best_iou = best_class[1]['iou']
+                    best_crop_path = best_class[1]['crop_path']
+                    
+                    logger.info(f"  ✅ 가장 높은 IoU: class_{best_class_name} (IoU={best_iou:.4f})")
+                    
+                    # coordinate_mapping.jpg로 복사
+                    mapping_path = section_output_dir / "coordinate_mapping.jpg"
+                    import shutil
+                    shutil.copy(best_crop_path, mapping_path)
+                    section_result['coordinate_mapping'] = str(mapping_path)
+                    logger.info(f"  coordinate_mapping.jpg 생성 완료: {mapping_path}")
+            
+            # answer_1 크롭
+            for i, det in enumerate(answer_1_dets):
+                x1, y1, x2, y2 = map(int, det['bbox'])
+                h, w = image.shape[:2]
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(w, x2), min(h, y2)
+                
+                if x2 <= x1 or y2 <= y1:
+                    continue
+                
+                cropped = image[y1:y2, x1:x2]
+                save_path = section_output_dir / f"answer_1_{i:02d}_conf{det['confidence']:.2f}.jpg"
+                cv2.imwrite(str(save_path), cropped)
+                section_result['answers'].append(str(save_path))
+                logger.info(f"  answer_1 crop 완료")
         
         logger.info(f"Section {section_idx} 처리 완료: 문제번호 {len(section_result['problem_numbers'])}개, "
                    f"정답 {len(section_result['answers'])}개, "
@@ -196,8 +309,9 @@ class HierarchicalCropPipeline:
             output_dir: 출력 디렉토리
             
         Returns:
-            Dict: 페이지 처리 결과
+            Dict: 페이지 처리 결과 (처리 시간 포함)
         """
+        start_time = time.time()
 
         logger.info(f"\n{'='*60}")
         logger.info(f"페이지 처리 시작: {Path(image_path).name}")
@@ -216,7 +330,8 @@ class HierarchicalCropPipeline:
             'page_name': page_name,
             'page_number_path': None,
             'page_number_ocr': None,  # OCR 결과 추가
-            'sections': []
+            'sections': [],
+            'processing_time': 0.0  # 처리 시간 추가
         }
         
         # 1단계: 페이지 번호 crop 및 OCR
@@ -263,9 +378,14 @@ class HierarchicalCropPipeline:
             )
             page_result['sections'].append(section_result)
 
+        end_time = time.time()
+        processing_time = end_time - start_time
+        page_result['processing_time'] = processing_time
+
         logger.info(f"\n페이지 '{page_name}' 처리 완료")
         logger.info(f"  - 페이지 번호: {page_num_ocr}")
         logger.info(f"  - Section 수: {len(section_info)}")
+        logger.info(f"  - 처리 시간: {processing_time:.2f}초")
         logger.info(f"  - 출력 디렉토리: {page_output_dir}")
         
         return page_result
