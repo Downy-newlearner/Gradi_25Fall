@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../widgets/continuous_learning_widget.dart';
+import '../../widgets/continuous_learning_widget_v2.dart';
+import '../../widgets/app_header.dart';
+import '../../widgets/app_header_title.dart';
+import '../../widgets/app_header_menu_button.dart';
 
 enum WorkbookViewType {
   byClass, // 클래스 순
@@ -173,48 +176,44 @@ class _WorkbookPageState extends State<WorkbookPage> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        MediaQuery.of(context).size.width * 0.05,
-        MediaQuery.of(context).size.height * 0.021,
-        MediaQuery.of(context).size.width * 0.05,
-        MediaQuery.of(context).size.height * 0.012,
-      ),
-      decoration: const BoxDecoration(color: Colors.white),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text(
-            '문제집',
-            style: TextStyle(
-              fontFamily: 'Pretendard',
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-              color: Color(0xFF333333),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.menu, color: Color(0xFF333333)),
-            onPressed: () {
-              // TODO: 메뉴 기능 구현
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('메뉴 기능 구현 예정')));
-            },
-          ),
-        ],
-      ),
+    return const AppHeader(
+      title: AppHeaderTitle('문제집'),
+      trailing: AppHeaderMenuButton(),
     );
   }
 
   Widget _buildWeeklyCalendar() {
-    return ContinuousLearningWidget(
+    // TODO: DB에서 실제 연속 학습 일수, 완료한 날짜, 숙제 마감일 조회
+    final Set<String> completedDates = {
+      '2025-10-22',
+      '2025-10-23',
+      '2025-10-24',
+      '2025-10-25',
+      '2025-10-26',
+      '2025-10-27',
+    };
+
+    final Set<String> homeworkDeadlines = {
+      '2025-10-22',
+      '2025-10-25',
+      '2025-10-26',
+    };
+
+    return ContinuousLearningWidgetV2(
       consecutiveDays: 2,
-      weeklyProgress: const [true, true, false, false, false, false, false],
+      completedDates: completedDates,
+      homeworkDeadlines: homeworkDeadlines,
     );
   }
 
   Widget _buildToggle() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    // 토글 크기 계산 (Figma 비율: 28:17 유지)
+    final toggleWidth = screenWidth * 0.07;
+    final toggleHeight = toggleWidth * (17 / 28); // 비율 유지
+    final circleSize = toggleWidth * (13 / 28); // 비율 유지
+    final circlePadding = toggleWidth * (2 / 28); // 비율 유지
+
     return Row(
       children: [
         // 토글 스위치
@@ -227,12 +226,8 @@ class _WorkbookPageState extends State<WorkbookPage> {
             });
           },
           child: Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.of(context).size.width * 0.12,
-              minWidth: 40,
-              maxHeight: 20,
-              minHeight: 16,
-            ),
+            width: toggleWidth,
+            height: toggleHeight,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFFAC5BF8), Color(0xFF7C3AED)],
@@ -247,15 +242,9 @@ class _WorkbookPageState extends State<WorkbookPage> {
                   ? Alignment.centerLeft
                   : Alignment.centerRight,
               child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.05,
-                  minWidth: 7,
-                  maxHeight: MediaQuery.of(context).size.width * 0.05,
-                  minHeight: 7,
-                ),
-                margin: EdgeInsets.symmetric(
-                  horizontal: MediaQuery.of(context).size.width * 0.005,
-                ),
+                width: circleSize,
+                height: circleSize,
+                margin: EdgeInsets.all(circlePadding),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
@@ -264,7 +253,7 @@ class _WorkbookPageState extends State<WorkbookPage> {
             ),
           ),
         ),
-        Container(width: MediaQuery.of(context).size.width * 0.03),
+        Container(width: screenWidth * 0.03),
         // 토글 라벨
         Text(
           _currentView == WorkbookViewType.byClass ? '최근 클래스 순' : '최근 문제집 순',

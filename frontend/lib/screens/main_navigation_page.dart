@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../widgets/bottom_navigation_widget.dart';
-import 'home_page.dart';
+import 'home_page_v2.dart';
 import 'workbook/workbook_page.dart';
 import 'academy/academy_page.dart';
 import 'mypage/mypage.dart';
+import 'notification/notification_page.dart';
+import 'upload/upload_images_page.dart';
 
 class MainNavigationPage extends StatefulWidget {
   const MainNavigationPage({super.key});
@@ -17,12 +19,12 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
 
   // 모든 탭 페이지들
   final List<Widget> _pages = [
-    const HomePage(),
+    const HomePageV2(), // V2로 변경
     const WorkbookPage(),
-    const PlaceholderPage(title: '이미지업로드'),
+    const UploadImagesPage(),
     const AcademyPage(),
     const MyPage(),
-    const PlaceholderPage(title: '알람'),
+    const NotificationPage(),
   ];
 
   @override

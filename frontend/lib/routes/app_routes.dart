@@ -30,6 +30,10 @@ import '../screens/mypage/learning_statistics_page.dart';
 import '../screens/mypage/account_management_page.dart';
 import '../screens/mypage/academy_management_page.dart';
 import '../screens/mypage/notification_settings_page.dart';
+import '../screens/notification/notification_page.dart';
+import '../screens/upload/upload_images_page.dart';
+import '../screens/upload/edit_grading_result_page.dart';
+import '../screens/continuous_learning_detail_page.dart';
 
 class AppRoutes {
   static const String mainNavigation = '/';
@@ -52,6 +56,8 @@ class AppRoutes {
   static const String accountManagement = '/mypage/account-management';
   static const String academyManagement = '/mypage/academy-management';
   static const String notificationSettings = '/mypage/notification-settings';
+  static const String notification = '/notification';
+  static const String continuousLearningDetail = '/continuous-learning-detail';
   static const String findId = '/find-id';
   static const String findIdError = '/find-id-error';
   static const String findIdVerification = '/find-id-verification';
@@ -63,6 +69,8 @@ class AppRoutes {
   static const String passwordResetForm = '/password-reset-form';
   static const String passwordResetSuccess = '/password-reset-success';
   static const String resetPassword = '/reset-password';
+  static const String uploadImages = '/upload/images';
+  static const String editGradingResult = '/upload/edit-result';
 
   static Map<String, WidgetBuilder> get routes => {
     mainNavigation: (context) => const MainNavigationPage(),
@@ -81,10 +89,12 @@ class AppRoutes {
     accountManagement: (context) => const AccountManagementPage(),
     academyManagement: (context) => const AcademyManagementPage(),
     notificationSettings: (context) => const NotificationSettingsPage(),
+    notification: (context) => const NotificationPage(),
     findId: (context) => const FindIDPage(),
     findIdError: (context) => const FindIDErrorPage(),
     findPassword: (context) => const FindPasswordPage(),
     findPasswordError: (context) => const FindPasswordErrorPage(),
+    uploadImages: (context) => const UploadImagesPage(),
   };
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
@@ -169,6 +179,16 @@ class AppRoutes {
             questionNumber: args['questionNumber'] as int,
             status: args['status'] as QuestionStatus,
           ),
+        );
+      case editGradingResult:
+        return MaterialPageRoute(
+          builder: (context) => const EditGradingResultPage(),
+          settings: settings,
+        );
+      case continuousLearningDetail:
+        return MaterialPageRoute(
+          builder: (context) => const ContinuousLearningDetailPage(),
+          settings: settings,
         );
       default:
         return null;

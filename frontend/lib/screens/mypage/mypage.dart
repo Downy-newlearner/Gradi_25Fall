@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../widgets/app_header.dart';
+import '../../widgets/app_header_title.dart';
+import '../../widgets/app_header_menu_button.dart';
 
 /// 마이페이지
 /// 사용자 프로필, 학습 현황, 각종 설정 메뉴를 제공하는 페이지
@@ -64,45 +67,9 @@ class _MyPageState extends State<MyPage> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 17, 20, 17),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x0D000000),
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Spacer(),
-          const Text(
-            '마이페이지',
-            style: TextStyle(
-              fontFamily: 'Pretendard',
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-              color: Color(0xFF585B69),
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.menu, color: Color(0xFF585B69), size: 24),
-            onPressed: () {
-              // TODO: 메뉴 기능 구현
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('메뉴 기능 구현 예정')),
-              );
-            },
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ],
-      ),
+    return const AppHeader(
+      title: AppHeaderTitle('마이페이지', textAlign: TextAlign.center),
+      trailing: AppHeaderMenuButton(),
     );
   }
 
@@ -139,11 +106,7 @@ class _MyPageState extends State<MyPage> {
                       },
                     ),
                   )
-                : const Icon(
-                    Icons.person,
-                    size: 32,
-                    color: Color(0xFF999999),
-                  ),
+                : const Icon(Icons.person, size: 32, color: Color(0xFF999999)),
           ),
           const SizedBox(width: 16),
 
@@ -166,9 +129,9 @@ class _MyPageState extends State<MyPage> {
             color: const Color(0xFF666666),
             onPressed: () {
               // TODO: 프로필 편집 페이지로 이동
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('프로필 편집 기능 구현 예정')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('프로필 편집 기능 구현 예정')));
             },
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
@@ -269,11 +232,7 @@ class _MyPageState extends State<MyPage> {
             ),
             child: Row(
               children: [
-                Icon(
-                  item.icon,
-                  size: 24,
-                  color: const Color(0xFF666666),
-                ),
+                Icon(item.icon, size: 24, color: const Color(0xFF666666)),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
@@ -306,10 +265,5 @@ class _MenuItem {
   final String title;
   final String route;
 
-  _MenuItem({
-    required this.icon,
-    required this.title,
-    required this.route,
-  });
+  _MenuItem({required this.icon, required this.title, required this.route});
 }
-

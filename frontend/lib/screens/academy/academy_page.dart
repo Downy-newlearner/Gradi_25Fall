@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../widgets/app_header.dart';
+import '../../widgets/app_header_title.dart';
+import '../../widgets/app_header_menu_button.dart';
 
 class AcademyPage extends StatefulWidget {
   const AcademyPage({super.key});
@@ -47,44 +50,9 @@ class _AcademyPageState extends State<AcademyPage> {
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(30, 17, 30, 17),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF8F9FA),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x1A000000),
-            blurRadius: 4,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const SizedBox(width: 24), // 시각적 균형을 위한 공간
-          const Text(
-            '학원',
-            style: TextStyle(
-              fontFamily: 'Pretendard',
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-              color: Color(0xFF585B69),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.menu, color: Color(0xFF585B69), size: 24),
-            onPressed: () {
-              // TODO: 메뉴 기능 구현
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('메뉴 기능 구현 예정')));
-            },
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ],
-      ),
+    return const AppHeader(
+      title: AppHeaderTitle('학원', textAlign: TextAlign.center),
+      trailing: AppHeaderMenuButton(),
     );
   }
 
