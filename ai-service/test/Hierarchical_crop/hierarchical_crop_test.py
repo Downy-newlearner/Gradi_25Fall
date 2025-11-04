@@ -88,12 +88,29 @@ def print_summary(all_results: list, output_dir: Path):
         for r in all_results
         for section in r["sections"]
     )
+    
+    # 새로운 클래스 통계
+    new_classes = ['1', '2', '3', '4', '5']
+    total_new_classes = {
+        cls: sum(
+            len(section.get(f"class_{cls}", []))
+            for r in all_results
+            for section in r["sections"]
+        )
+        for cls in new_classes
+    }
 
     logger.info(f"\n[기본 통계]")
     logger.info(f"  처리된 페이지: {len(all_results)}개")
     logger.info(f"  총 Section 수: {total_sections}개")
     logger.info(f"  총 문제번호 인식: {total_problems}개")
-    logger.info(f"  출력 위치: {output_dir}")
+    
+    # 새로운 클래스별 통계 출력
+    logger.info(f"\n[새로운 클래스 검출 통계]")
+    for cls in new_classes:
+        logger.info(f"  클래스 {cls}: {total_new_classes[cls]}개")
+    
+    logger.info(f"\n  출력 위치: {output_dir}")
 
     # 페이지별 상세 결과
     logger.info(f"\n[페이지별 OCR 결과]")
@@ -117,6 +134,17 @@ def print_summary(all_results: list, output_dir: Path):
                     logger.info(
                         f"      • 문제 {p['number']}: confidence={p['confidence']:.3f}"
                     )
+            
+            # 새로운 클래스 정보 출력
+            new_class_counts = {}
+            for cls in new_classes:
+                count = len(section.get(f"class_{cls}", []))
+                if count > 0:
+                    new_class_counts[cls] = count
+            
+            if new_class_counts:
+                class_info = ", ".join([f"클래스 {cls}: {cnt}개" for cls, cnt in new_class_counts.items()])
+                logger.info(f"      🔹 {class_info}")
 
     # 성공률 분석
     logger.info(f"\n[인식 성공률]")
@@ -134,12 +162,26 @@ def print_summary(all_results: list, output_dir: Path):
     problem_success_rate = (
         sections_with_problems / total_sections * 100 if total_sections else 0
     )
+    
+    # 새로운 클래스가 검출된 섹션 수
+    sections_with_new_classes = sum(
+        1
+        for r in all_results
+        for section in r["sections"]
+        if any(section.get(f"class_{cls}", []) for cls in new_classes)
+    )
+    new_class_success_rate = (
+        sections_with_new_classes / total_sections * 100 if total_sections else 0
+    )
 
     logger.info(
         f"  페이지 번호 인식 성공: {pages_with_page_num}/{len(all_results)} ({page_num_success_rate:.1f}%)"
     )
     logger.info(
         f"  문제번호 포함 Section: {sections_with_problems}/{total_sections} ({problem_success_rate:.1f}%)"
+    )
+    logger.info(
+        f"  새로운 클래스 포함 Section: {sections_with_new_classes}/{total_sections} ({new_class_success_rate:.1f}%)"
     )
 
     logger.info("\n" + "=" * 60)
@@ -151,4 +193,4 @@ def print_summary(all_results: list, output_dir: Path):
 if __name__ == "__main__":
     main()
 
-# 파일 실행: python -m test.Hierarchical_crop.hierarchical_crop_test 
+# 파일 실행: python -m test.Hierarchical_crop.hierarchical_crop_test

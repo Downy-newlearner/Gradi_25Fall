@@ -80,7 +80,7 @@ class HierarchicalCropPipeline:
             Dict: 섹션 처리 결과 (문제번호 경로 및 OCR 결과 포함)
         """
         
-        # 해당 section 내부에 있는 문제번호 및 정답만 필터링
+        # 해당 section 내부에 있는 문제번호, 정답 및 새로운 클래스(1~5) 필터링
         sx1, sy1, sx2, sy2 = section_bbox
         detections = []
         
@@ -90,7 +90,7 @@ class HierarchicalCropPipeline:
             center_y = (dy1 + dy2) / 2
             
             if sx1 <= center_x <= sx2 and sy1 <= center_y <= sy2:
-                if det['class_name'] in ['problem_number', 'answer_1', 'answer_2']:
+                if det['class_name'] in ['problem_number', 'answer_1', 'answer_2', '1', '2', '3', '4', '5']:
                     detections.append(det)
         
         # 원본 페이지 이미지 로드
@@ -103,7 +103,12 @@ class HierarchicalCropPipeline:
             'section_idx': section_idx,
             'problem_numbers': [],
             'problem_numbers_ocr': [],  # OCR 결과 추가
-            'answers': []
+            'answers': [],
+            'class_1': [],  # 새로운 클래스 1
+            'class_2': [],  # 새로운 클래스 2
+            'class_3': [],  # 새로운 클래스 3
+            'class_4': [],  # 새로운 클래스 4
+            'class_5': []   # 새로운 클래스 5
         }
         
         section_output_dir = output_dir / page_name / f"section_{section_idx:02d}"
@@ -156,7 +161,31 @@ class HierarchicalCropPipeline:
                 cv2.imwrite(str(save_path), cropped)
                 section_result['answers'].append(str(save_path))
         
-        logger.info(f"Section {section_idx} 처리 완료: 문제번호 {len(section_result['problem_numbers'])}개, 정답 {len(section_result['answers'])}개")
+        # 새로운 클래스 1~5 crop
+        new_classes = ['1', '2', '3', '4', '5']
+        for new_class in new_classes:
+            new_class_dets = [d for d in detections if d['class_name'] == new_class]
+            logger.info(f"Section {section_idx}: {len(new_class_dets)}개 클래스 '{new_class}' 검출")
+            
+            for i, det in enumerate(new_class_dets):
+                x1, y1, x2, y2 = map(int, det['bbox'])
+                h, w = image.shape[:2]
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(w, x2), min(h, y2)
+                
+                if x2 <= x1 or y2 <= y1:
+                    continue
+                
+                cropped = image[y1:y2, x1:x2]
+                save_path = section_output_dir / f"class_{new_class}_{i:02d}_conf{det['confidence']:.2f}.jpg"
+                cv2.imwrite(str(save_path), cropped)
+                section_result[f'class_{new_class}'].append(str(save_path))
+                
+                logger.info(f"  클래스 {new_class} {i}: crop 완료 (conf={det['confidence']:.2f})")
+        
+        logger.info(f"Section {section_idx} 처리 완료: 문제번호 {len(section_result['problem_numbers'])}개, "
+                   f"정답 {len(section_result['answers'])}개, "
+                   f"새로운 클래스 {sum(len(section_result[f'class_{c}']) for c in new_classes)}개")
         return section_result
     
     def process_page(self, image_path: str, output_dir: Path) -> Dict:
@@ -225,8 +254,8 @@ class HierarchicalCropPipeline:
         
         logger.info(f"총 {len(section_info)}개 Section 검출됨")
         
-        # 3-4단계: 각 Section 처리 (문제번호 OCR 포함)
-        logger.info("\n3. 각 Section에서 문제번호 및 정답 crop (OCR 수행)")
+        # 3-4단계: 각 Section 처리 (문제번호 OCR 및 새로운 클래스 포함)
+        logger.info("\n3. 각 Section에서 문제번호, 정답 및 새로운 클래스(1~5) crop (OCR 수행)")
         for section_path, section_idx, section_bbox in section_info:
             section_result = self.process_single_section(
                 image_path, section_idx, page_name, output_dir,
