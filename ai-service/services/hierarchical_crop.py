@@ -8,7 +8,7 @@ from typing import Dict, List, Tuple, Optional
 import cv2
 import numpy as np
 from models.Detection.Model_routing_1104.run_routed_inference import RoutedInference
-from models.recognition.ocr import OCRModel
+from models.Recognition.ocr import OCRModel
 
 logging.basicConfig(
     level=logging.INFO,
@@ -108,284 +108,103 @@ class HierarchicalCropPipeline:
         
         return str(save_path), recognized_number
     
-
     def process_single_section(self, original_image_path: str, section_idx: int, 
-                               page_name: str, output_dir: Path, 
-                               section_bbox: List[float], all_detections: List[Dict]) -> Dict:
-        """섹션 내의 문제번호와 정답을 크롭하고 OCR 수행
+                            page_name: str, output_dir: Path, 
+                            section_bbox: List[float], all_detections: List[Dict]) -> Dict:
+        """섹션 내의 문제번호와 정답을 추론 (IoU 기반 정답 번호 결정)
         
         Returns:
-            Dict: 섹션 처리 결과 (문제번호 경로 및 OCR 결과 포함)
+            Dict: {'section_idx', 'problem_number_ocr', 'answer_number'}
         """
-        
-        # 해당 section 내부에 있는 문제번호, 정답 및 새로운 클래스(1~5) 필터링
         sx1, sy1, sx2, sy2 = section_bbox
-        detections = []
-        
+        section_dets = []
+
         for det in all_detections:
             dx1, dy1, dx2, dy2 = det['bbox']
-            center_x = (dx1 + dx2) / 2
-            center_y = (dy1 + dy2) / 2
-            
-            if sx1 <= center_x <= sx2 and sy1 <= center_y <= sy2:
-                if det['class_name'] in ['problem_number', 'answer_1', 'answer_2', '1', '2', '3', '4', '5']:
-                    detections.append(det)
-        
-        # 클래스별로 신뢰도가 가장 높은 것만 선택
-        filtered_detections = {}
-        for det in detections:
-            class_name = det['class_name']
-            if class_name not in filtered_detections or det['confidence'] > filtered_detections[class_name]['confidence']:
-                filtered_detections[class_name] = det
-        
-        detections = list(filtered_detections.values())
-        
-        # 원본 페이지 이미지 로드
-        image = cv2.imread(original_image_path)
-        if image is None:
-            logger.error(f"원본 이미지 로드 실패: {original_image_path}")
-            return {}
-        
-        section_result = {
-            'section_idx': section_idx,
-            'problem_numbers': [],
-            'problem_numbers_ocr': [],  # OCR 결과 추가
-            'answers': [],
-            'class_1': [],  # 새로운 클래스 1
-            'class_2': [],  # 새로운 클래스 2
-            'class_3': [],  # 새로운 클래스 3
-            'class_4': [],  # 새로운 클래스 4
-            'class_5': [],  # 새로운 클래스 5
-            'coordinate_mapping': None  # coordinate mapping 이미지 경로
-        }
-        
-        section_output_dir = output_dir / page_name / f"section_{section_idx:02d}"
-        section_output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # answer_2 존재 여부 확인
-        has_answer_2 = any(d['class_name'] == 'answer_2' for d in detections)
-        
-        logger.info(f"Section {section_idx}: answer_2 {'존재' if has_answer_2 else '없음'}")
-        
-        # 문제 번호 crop 및 OCR
-        problem_num_dets = [d for d in detections if d['class_name'] == 'problem_number']
-        logger.info(f"Section {section_idx}: {len(problem_num_dets)}개 문제번호 검출")
-        
-        for i, det in enumerate(problem_num_dets):
-            x1, y1, x2, y2 = map(int, det['bbox'])
-            h, w = image.shape[:2]
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(w, x2), min(h, y2)
-            
-            if x2 <= x1 or y2 <= y1:
-                continue
-            
-            cropped = image[y1:y2, x1:x2]
-            save_path = section_output_dir / f"problem_number_{i:02d}_conf{det['confidence']:.2f}.jpg"
-            cv2.imwrite(str(save_path), cropped)
-            
-            # OCR로 문제 번호 인식
-            recognized_number = self.ocr.extract_number(str(save_path))
-            
-            section_result['problem_numbers'].append(str(save_path))
-            section_result['problem_numbers_ocr'].append({
-                'path': str(save_path),
-                'number': recognized_number,
-                'confidence': det['confidence']
-            })
-            
-            logger.info(f"  문제번호 {i}: OCR='{recognized_number}' (conf={det['confidence']:.2f})")
-        
-        # 새로운 클래스 1~5 crop
-        new_classes = ['1', '2', '3', '4', '5']
-        new_class_detections = {}
-        
-        for new_class in new_classes:
-            new_class_dets = [d for d in detections if d['class_name'] == new_class]
-            
-            for i, det in enumerate(new_class_dets):
-                x1, y1, x2, y2 = map(int, det['bbox'])
-                h, w = image.shape[:2]
-                x1, y1 = max(0, x1), max(0, y1)
-                x2, y2 = min(w, x2), min(h, y2)
-                
-                if x2 <= x1 or y2 <= y1:
-                    continue
-                
-                cropped = image[y1:y2, x1:x2]
-                save_path = section_output_dir / f"class_{new_class}_{i:02d}_conf{det['confidence']:.2f}.jpg"
-                cv2.imwrite(str(save_path), cropped)
-                section_result[f'class_{new_class}'].append(str(save_path))
-                
-                # 나중에 IoU 계산을 위해 저장
-                new_class_detections[new_class] = {
-                    'det': det,
-                    'crop_path': str(save_path)
-                }
-                
-                logger.info(f"  클래스 {new_class}: crop 완료 (conf={det['confidence']:.2f})")
-        
-        # 정답 crop (answer_1, answer_2)
-        if has_answer_2:
-            # answer_2가 있으면 일반적으로 크롭
-            answer_classes = ['answer_1', 'answer_2']
-            for ans_class in answer_classes:
-                ans_dets = [d for d in detections if d['class_name'] == ans_class]
-                for i, det in enumerate(ans_dets):
-                    x1, y1, x2, y2 = map(int, det['bbox'])
-                    h, w = image.shape[:2]
-                    x1, y1 = max(0, x1), max(0, y1)
-                    x2, y2 = min(w, x2), min(h, y2)
-                    
-                    if x2 <= x1 or y2 <= y1:
-                        continue
-                    
-                    cropped = image[y1:y2, x1:x2]
-                    save_path = section_output_dir / f"{ans_class}_{i:02d}_conf{det['confidence']:.2f}.jpg"
-                    cv2.imwrite(str(save_path), cropped)
-                    section_result['answers'].append(str(save_path))
-                    logger.info(f"  {ans_class} crop 완료")
-        else:
-            # answer_2가 없으면 answer_1과 class 1~5의 IoU 계산
-            answer_1_dets = [d for d in detections if d['class_name'] == 'answer_1']
-            
-            if answer_1_dets and new_class_detections:
-                answer_1_det = answer_1_dets[0]
-                answer_1_bbox = answer_1_det['bbox']
-                
-                # 각 class 1~5와 IoU 계산
-                iou_scores = {}
-                for class_name, class_data in new_class_detections.items():
-                    class_bbox = class_data['det']['bbox']
-                    iou = self.calculate_iou(answer_1_bbox, class_bbox)
-                    iou_scores[class_name] = {
-                        'iou': iou,
-                        'crop_path': class_data['crop_path']
-                    }
-                    logger.info(f"  answer_1과 class_{class_name}의 IoU: {iou:.4f}")
-                
-                # 가장 높은 IoU를 가진 클래스 선택
-                if iou_scores:
-                    best_class = max(iou_scores.items(), key=lambda x: x[1]['iou'])
-                    best_class_name = best_class[0]
-                    best_iou = best_class[1]['iou']
-                    best_crop_path = best_class[1]['crop_path']
-                    
-                    logger.info(f"  ✅ 가장 높은 IoU: class_{best_class_name} (IoU={best_iou:.4f})")
-                    
-                    # coordinate_mapping.jpg로 복사
-                    mapping_path = section_output_dir / "coordinate_mapping.jpg"
-                    import shutil
-                    shutil.copy(best_crop_path, mapping_path)
-                    section_result['coordinate_mapping'] = str(mapping_path)
-                    logger.info(f"  coordinate_mapping.jpg 생성 완료: {mapping_path}")
-            
-            # answer_1 크롭
-            for i, det in enumerate(answer_1_dets):
-                x1, y1, x2, y2 = map(int, det['bbox'])
-                h, w = image.shape[:2]
-                x1, y1 = max(0, x1), max(0, y1)
-                x2, y2 = min(w, x2), min(h, y2)
-                
-                if x2 <= x1 or y2 <= y1:
-                    continue
-                
-                cropped = image[y1:y2, x1:x2]
-                save_path = section_output_dir / f"answer_1_{i:02d}_conf{det['confidence']:.2f}.jpg"
-                cv2.imwrite(str(save_path), cropped)
-                section_result['answers'].append(str(save_path))
-                logger.info(f"  answer_1 crop 완료")
-        
-        logger.info(f"Section {section_idx} 처리 완료: 문제번호 {len(section_result['problem_numbers'])}개, "
-                   f"정답 {len(section_result['answers'])}개, "
-                   f"새로운 클래스 {sum(len(section_result[f'class_{c}']) for c in new_classes)}개")
-        return section_result
-    
-    def process_page(self, image_path: str, output_dir: Path) -> Dict:
-        """전체 파이프라인(한 페이지 처리)
-        
-        Args:
-            image_path: 입력 이미지 경로
-            output_dir: 출력 디렉토리
-            
-        Returns:
-            Dict: 페이지 처리 결과 (처리 시간 포함)
-        """
-        start_time = time.time()
+            cx, cy = (dx1 + dx2) / 2, (dy1 + dy2) / 2
+            if sx1 <= cx <= sx2 and sy1 <= cy <= sy2:
+                if det['class_name'] in ['problem_number', 'answer_1', '1', '2', '3', '4', '5']:
+                    section_dets.append(det)
 
-        logger.info(f"\n{'='*60}")
-        logger.info(f"페이지 처리 시작: {Path(image_path).name}")
-        logger.info(f"{'='*60}")
-        
-        # 전체 페이지 추론
+        # 문제번호 OCR (여기만 crop + OCR 수행)
+        image = cv2.imread(original_image_path)
+        problem_ocr = None
+        problem_num_dets = [d for d in section_dets if d['class_name'] == 'problem_number']
+        if problem_num_dets:
+            best_det = max(problem_num_dets, key=lambda x: x['confidence'])
+            x1, y1, x2, y2 = map(int, best_det['bbox'])
+            cropped = image[y1:y2, x1:x2]
+            tmp_path = f"/tmp/problem_tmp_{page_name}_{section_idx}.jpg"
+            cv2.imwrite(tmp_path, cropped)
+            problem_ocr = self.ocr.extract_number(tmp_path)
+
+        # answer_1과 class 1~5의 IoU 계산
+        answer_1_dets = [d for d in section_dets if d['class_name'] == 'answer_1']
+        class_dets = [d for d in section_dets if d['class_name'] in ['1', '2', '3', '4', '5']]
+        best_answer = None
+        best_iou = 0.0
+
+        if answer_1_dets and class_dets:
+            a_bbox = answer_1_dets[0]['bbox']
+            for det in class_dets:
+                iou = self.calculate_iou(a_bbox, det['bbox'])
+                if iou > best_iou:
+                    best_iou = iou
+                    best_answer = det['class_name']
+
+        return {
+            'section_idx': section_idx,
+            'problem_number_ocr': problem_ocr,
+            'answer_number': best_answer
+        }
+
+    def process_page(self, image_path: str, output_dir: Path) -> Dict:
+        """3-4단계만 수행: 각 Section에서 문제번호 OCR + 정답 번호 추론 및 CSV 저장"""
+        start_time = time.time()
         result = self.router.route_infer_single_image(image_path)
         detections = result['detections']
-        
+
         page_name = Path(image_path).stem
         page_output_dir = output_dir / page_name
         page_output_dir.mkdir(parents=True, exist_ok=True)
-        
-        page_result = {
-            'image_path': image_path,
-            'page_name': page_name,
-            'page_number_path': None,
-            'page_number_ocr': None,  # OCR 결과 추가
-            'sections': [],
-            'processing_time': 0.0  # 처리 시간 추가
-        }
-        
-        # 1단계: 페이지 번호 crop 및 OCR
-        logger.info("\n1. 페이지 번호 crop 및 OCR")
+
+        # 페이지 번호 OCR
         page_num_path, page_num_ocr = self.crop_page_number(image_path, detections, page_output_dir)
-        page_result['page_number_path'] = page_num_path
-        page_result['page_number_ocr'] = page_num_ocr
-        
-        # 2단계: Section crop
-        logger.info("\n2. Section crop")
+
+        # Section 영역 검출
         section_detections = [d for d in detections if d['class_name'] == 'section']
         section_detections = sorted(section_detections, key=lambda x: x['bbox'][1])
-        
-        section_info = []  # (path, idx, bbox) 저장
-        image = cv2.imread(image_path)
-        
+
+        page_result = []
         for idx, det in enumerate(section_detections):
-            x1, y1, x2, y2 = map(int, det['bbox'])
-            h, w = image.shape[:2]
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(w, x2), min(h, y2)
-            
-            if x2 <= x1 or y2 <= y1:
-                continue
-            
-            # Section 이미지 저장
-            cropped = image[y1:y2, x1:x2]
-            section_dir = page_output_dir / "sections"
-            section_dir.mkdir(parents=True, exist_ok=True)
-            save_path = section_dir / f"{page_name}_section_{idx:02d}.jpg"
-            cv2.imwrite(str(save_path), cropped)
-            
-            section_info.append((str(save_path), idx, det['bbox']))
-            logger.info(f"Section {idx} crop 완료: {save_path}")
-        
-        logger.info(f"총 {len(section_info)}개 Section 검출됨")
-        
-        # 3-4단계: 각 Section 처리 (문제번호 OCR 및 새로운 클래스 포함)
-        logger.info("\n3. 각 Section에서 문제번호, 정답 및 새로운 클래스(1~5) crop (OCR 수행)")
-        for section_path, section_idx, section_bbox in section_info:
+            section_bbox = det['bbox']
             section_result = self.process_single_section(
-                image_path, section_idx, page_name, output_dir,
-                section_bbox, detections
+                image_path, idx, page_name, output_dir, section_bbox, detections
             )
-            page_result['sections'].append(section_result)
+            page_result.append(section_result)
+
+        # 결과 CSV 저장 (문제번호 포함)
+        csv_path = page_output_dir / f"{page_name}_results.csv"
+        import csv
+        with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(["image_name", "page_number", "problem_number", "answer_number"])
+            for r in page_result:
+                writer.writerow([
+                    page_name,
+                    page_num_ocr if page_num_ocr else "",
+                    r.get('problem_number_ocr', ""),
+                    r.get('answer_number', "")
+                ])
+
+        logger.info(f"결과 CSV 저장 완료: {csv_path}")
 
         end_time = time.time()
-        processing_time = end_time - start_time
-        page_result['processing_time'] = processing_time
-
-        logger.info(f"\n페이지 '{page_name}' 처리 완료")
-        logger.info(f"  - 페이지 번호: {page_num_ocr}")
-        logger.info(f"  - Section 수: {len(section_info)}")
-        logger.info(f"  - 처리 시간: {processing_time:.2f}초")
-        logger.info(f"  - 출력 디렉토리: {page_output_dir}")
-        
-        return page_result
+        return {
+            "image_path": image_path,
+            "page_name": page_name,
+            "page_number_ocr": page_num_ocr,
+            "results_csv": str(csv_path),
+            "sections": page_result,
+            "processing_time": end_time - start_time
+        }
