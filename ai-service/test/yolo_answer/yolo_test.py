@@ -8,19 +8,17 @@ from test.YOLO.yolo_test_crop import HierarchicalCropPipeline
 current_dir = Path(__file__).parent
 log_file = current_dir / "ocr_results.log"
 
+# 루트 로거 설정 (모든 모듈의 로그를 캡처)
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_file, encoding="utf-8"),  # 파일 출력
+        logging.StreamHandler()  # 콘솔 출력
+    ]
 )
+
 logger = logging.getLogger(__name__)
-
-# 파일 출력 추가 (utf-8 인코딩)
-file_handler = logging.FileHandler(log_file, encoding="utf-8")
-file_handler.setLevel(logging.INFO)
-file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-file_handler.setFormatter(file_formatter)
-logger.addHandler(file_handler)
-
 logger.info(f"✅ 로그 파일이 '{log_file}'로 저장됩니다.")
 
 
@@ -31,9 +29,8 @@ def main():
     # 경로 설정
     input_images_dir = current_dir / "images" / "exp_images"
     output_dir = current_dir / "images" / "test_results"
-    model_dir_1104 = current_dir.parent.parent / "models" / "Detection" / "legacy" / "Model_routing_1104"
-    model_dir_1004 = current_dir.parent.parent / "models" / "Detection" / "legacy" / "Model_routing_1004"
-
+    model_dir = current_dir.parent.parent / "models" / "Detection" / "Model_routing_1111" / "models"
+    
     # 답지 파일 경로 (필요한 경우 수정)
     # 답지 형식: 페이지번호, 문제번호, 정답 (각 줄마다 쉼표로 구분)
     # 예: 1, 1, 3
@@ -50,15 +47,13 @@ def main():
     logger.info("=" * 60)
     logger.info(f"입력 디렉토리: {input_images_dir}")
     logger.info(f"출력 디렉토리: {output_dir}")
-    logger.info(f"1104 모델 디렉토리: {model_dir_1104}")
-    logger.info(f"1004 모델 디렉토리: {model_dir_1004}")
+    logger.info(f"1111 모델 디렉토리: {model_dir}")
     logger.info(f"답지 파일: {answer_key_path}")
 
-    # 파이프라인 초기화 (section_padding 증가, 답지 파일 추가)
+    # 파이프라인 초기화 (통합 모델 사용)
     pipeline = HierarchicalCropPipeline(
-        str(model_dir_1104), 
-        str(model_dir_1004),
-        section_padding=50,  # 20 → 50으로 증가
+        str(model_dir),
+        section_padding=50,
         answer_key_path=str(answer_key_path) if answer_key_path else None
     )
 
@@ -84,20 +79,29 @@ def main():
         logger.info(f"\n\n{'#' * 60}")
         logger.info(f"[{idx + 1}/{len(image_files)}] 이미지 처리 중: {Path(image_path).name}")
         logger.info(f"{'#' * 60}")
+        
+        # 디버깅: 파일 정보 출력
+        logger.info(f"🔍 DEBUG: 이미지 경로 = {image_path}")
+        logger.info(f"🔍 DEBUG: 이미지 존재 = {image_path.exists()}")
+        logger.info(f"🔍 DEBUG: 출력 디렉토리 = {output_dir}")
 
         try:
+            logger.info(f"🔄 DEBUG: process_page() 호출 시작...")
             result = pipeline.process_page(str(image_path), output_dir)
+            logger.info(f"🔄 DEBUG: process_page() 호출 완료 (result is None: {result is None})")
             
             if result is None:
-                # 답지에 없는 페이지
+                # Section이 없는 등의 이유로 처리 실패
                 skipped_pages.append(Path(image_path).name)
-                logger.info(f"⏭️ 페이지 건너뜀 (답지에 없음)")
+                logger.warning(f"⚠️ 페이지 처리 실패 (Section 미검출 등)")
             else:
                 all_results.append(result)
                 logger.info(f"✅ 페이지 '{result['page_name']}' 처리 완료: {result['processing_time']:.2f}초")
         except Exception as e:
-            logger.error(f"이미지 처리 실패: {image_path}")
-            logger.error(f"에러: {e}", exc_info=True)
+            logger.error(f"❌ 이미지 처리 실패: {image_path}")
+            logger.error(f"❌ 에러 타입: {type(e).__name__}")
+            logger.error(f"❌ 에러 메시지: {e}", exc_info=True)
+            skipped_pages.append(Path(image_path).name)
             continue
 
     total_end_time = time.time()
@@ -111,10 +115,11 @@ def main():
 
 def save_results_txt(all_results: list, output_dir: Path):
     """
-    TXT 파일에 페이지 번호, 문제 번호, 인식된 답을 한 줄씩 저장
+    TXT 파일에 이미지 이름, 문제 번호, 최종 답변을 한 줄씩 저장
+    형식: {이미지 이름}, {문제 번호}, {최종 답변}
     """
     txt_path = output_dir.parent.parent / "answers" / "results_summary.txt"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    txt_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not all_results:
         logger.warning("⚠️ 저장할 결과가 없습니다.")
@@ -123,31 +128,41 @@ def save_results_txt(all_results: list, output_dir: Path):
     with open(txt_path, "w", encoding="utf-8") as f:
         for result in all_results:
             page_name = result.get("page_name", "")
-            page_num_ocr = result.get("page_number_ocr", "")
             sections = result.get("sections", [])
             
             for section in sections:
                 problem_number = section.get("problem_number_ocr", "")
                 answer_number = section.get("answer_number", "")
                 
-                # 이미지 파일명, 페이지 번호, 문제 번호, 답 번호를 쉼표로 구분하여 한 줄에 작성
-                line = f"{page_name}, {page_num_ocr}, {problem_number}, {answer_number}\n"
+                # 이미지 파일명, 문제 번호, 답안 번호를 쉼표로 구분하여 한 줄에 작성
+                line = f"{page_name}, {problem_number}, {answer_number}\n"
                 f.write(line)
 
     logger.info(f"\n📄 TXT 결과 저장 완료: {txt_path}")
+    logger.info(f"📄 형식: {{이미지 이름}}, {{문제 번호}}, {{최종 답변}}")
     
     # 총 라인 수 계산
     total_lines = sum(len(r.get("sections", [])) for r in all_results)
     logger.info(f"총 {total_lines}개 문제 결과가 저장되었습니다.")
     
-    # None 답안 통계
+    # 통계
+    total_problems = 0
+    answered_problems = 0
     none_count = 0
+    
     for result in all_results:
         for section in result.get("sections", []):
-            if section.get("answer_number") is None:
+            total_problems += 1
+            answer = section.get("answer_number")
+            if answer is None or answer == "":
                 none_count += 1
+            else:
+                answered_problems += 1
     
-    logger.info(f"None 답안: {none_count}개 ({none_count/total_lines*100:.1f}%)")
+    logger.info(f"\n📊 답안 추론 통계:")
+    logger.info(f"  총 문제 수: {total_problems}개")
+    logger.info(f"  답안 추론 성공: {answered_problems}개 ({answered_problems/total_problems*100:.1f}%)")
+    logger.info(f"  답안 추론 실패 (None): {none_count}개 ({none_count/total_problems*100:.1f}%)")
 
 
 def save_none_analysis(all_results: list, output_dir: Path):
@@ -223,11 +238,11 @@ def save_none_analysis(all_results: list, output_dir: Path):
             # 원인 분석
             f.write(f"  🔍 원인 분석:\n")
             if answer_1_count == 0:
-                f.write(f"     ❌ answer_1이 검출되지 않음 (1104 모델 문제)\n")
-                f.write(f"     → 해결방법: 1104 모델 재학습 또는 confidence threshold 조정\n")
+                f.write(f"     ❌ answer_1이 검출되지 않음 (1111 모델 문제)\n")
+                f.write(f"     → 해결방법: 1111 모델 재학습 또는 confidence threshold 조정\n")
             elif class_count == 0:
-                f.write(f"     ❌ 숫자(1-5)가 검출되지 않음 (1104 모델 문제)\n")
-                f.write(f"     → 해결방법: 1104 모델 재학습 또는 confidence threshold 조정\n")
+                f.write(f"     ❌ 숫자(1-5)가 검출되지 않음 (1111 모델 문제)\n")
+                f.write(f"     → 해결방법: 1111 모델 재학습 또는 confidence threshold 조정\n")
             elif best_iou == 0.0:
                 f.write(f"     ❌ IoU가 0 (answer_1과 숫자의 위치가 겹치지 않음)\n")
                 f.write(f"     → 해결방법: \n")

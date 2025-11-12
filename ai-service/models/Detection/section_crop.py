@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# section_crop.py
 """
 라우팅 추론 결과를 기반으로 Section 클래스 크롭 스크립트
 

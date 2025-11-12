@@ -1,7 +1,3 @@
-# llmdb_pipeline_groq.py
-# 문제집 이미지 처리 및 JSON 저장 파이프라인
-# YOLO 감지 + 이미지 저장 + OCR 인식 + JSON 저장
-
 import os
 from dotenv import load_dotenv
 import logging
@@ -31,12 +27,11 @@ logger = logging.getLogger(__name__)
 # 메인 파이프라인 클래스
 # -----------------------------------------------------------
 class LLMDBPipeline:
-    """문제집 이미지 → 이미지 저장 → OCR 인식 → JSON 저장"""
+    """문제집 이미지 → 이미지 저장"""
 
-    def __init__(self, model_dir: str, output_json_path: str = "questions.json", groq_api_key: Optional[str] = None):
+    def __init__(self, model_dir: str, groq_api_key: Optional[str] = None):
         self.router = RoutedInference(model_dir)
         self.ocr = OCRModel()
-        self.output_json_path = output_json_path
         
         # JSON 파일 초기화
         self._init_json_file()
@@ -254,98 +249,6 @@ class LLMDBPipeline:
         except Exception as e:
             logger.error(f"페이지 Crop 중 오류 발생 ({image_path}): {e}")
 
-    # -------------------------------------------------------
-    # 페이지 단위 처리 - 2단계: OCR 인식 (output_dir 기반)
-    # -------------------------------------------------------
-    def ocr_page_from_dir(self, page_output: Path):
-        """output 폴더에 저장된 이미지들에 대해 OCR 수행"""
-        try:
-            # 페이지 번호 이미지 찾기
-            page_num_files = list(page_output.glob("page_numbers/*_page_number.jpg"))
-            if not page_num_files:
-                logger.error(f"페이지 번호 이미지 없음: {page_output}")
-                return
-
-            page_num_path = str(page_num_files[0])
-            page_number = self.ocr.extract_number(page_num_path)
-            if not page_number:
-                logger.error(f"페이지 번호 인식 실패: {page_num_path}")
-                return
-
-            # 모든 section 폴더 처리
-            section_dirs = sorted([d for d in page_output.iterdir() if d.is_dir() and d.name.startswith("section_")])
-            total_questions = 0
-
-            for section_dir in section_dirs:
-                # section 폴더에서 문제 번호 파일들 찾기
-                prob_num_files = sorted(section_dir.glob("prob_*_number.jpg"))
-                
-                for prob_num_file in prob_num_files:
-                    # 해당 문제의 모든 이미지 찾기
-                    prob_idx = prob_num_file.name.split("_")[1]
-                    
-                    result = {
-                        "page_number": page_number,
-                        "problem_number": None,
-                        "korean_content": None,
-                        "english_content": None,
-                        "answer_option": None,
-                        "crop_paths": {"problem_number": str(prob_num_file)}
-                    }
-
-                    # 영어 지문 처리
-                    eng_files = list(section_dir.glob(f"prob_{prob_idx}_english_content.jpg"))
-                    if eng_files:
-                        eng_path = str(eng_files[0])
-                        result["crop_paths"]["english_content"] = eng_path
-                        eng_text = self.extract_text_from_image(eng_path)
-                        result["english_content"] = eng_text
-
-                    # 한국어 지문 처리
-                    kor_files = list(section_dir.glob(f"prob_{prob_idx}_korean_content.jpg"))
-                    if kor_files:
-                        kor_path = str(kor_files[0])
-                        result["crop_paths"]["korean_content"] = kor_path
-                        kor_text = self.extract_text_from_image(kor_path)
-                        result["korean_content"] = kor_text
-
-                    # 선택지 처리
-                    answer_files = sorted(section_dir.glob(f"prob_{prob_idx}_answer*.jpg"))
-                    answer_list = []
-                    for ans_file in answer_files:
-                        result["crop_paths"][ans_file.stem.replace(f"prob_{prob_idx}_", "")] = str(ans_file)
-                        ans_text = self.extract_text_from_image(str(ans_file))
-                        answer_list.append(ans_text)
-                    
-                    if answer_list:
-                        result["answer_option"] = json.dumps(answer_list, ensure_ascii=False)
-
-                    # 문제 번호 OCR
-                    prob_num = self.ocr.extract_number(str(prob_num_file))
-                    result["problem_number"] = prob_num
-
-                    # JSON 저장
-                    self.save_to_json(result)
-                    total_questions += 1
-
-            logger.info(f"페이지 {page_number}: {total_questions}개 문제 OCR 완료 및 JSON 저장")
-        except Exception as e:
-            logger.error(f"페이지 OCR 처리 중 오류 발생 ({page_output}): {e}")
-
-    def ocr_all_pages(self, output_dir: str):
-        """Step 2: output 폴더의 모든 페이지에 대해 OCR 수행"""
-        logger.info("=== Step 2: 모든 이미지 OCR 시작 ===")
-        
-        output_path = Path(output_dir)
-        # 각 페이지 폴더 처리
-        page_dirs = sorted([d for d in output_path.iterdir() if d.is_dir()])
-        
-        for page_dir in page_dirs:
-            logger.info(f"OCR 처리 중: {page_dir.name}")
-            self.ocr_page_from_dir(page_dir)
-        
-        logger.info(f"=== Step 2 완료: OCR 및 JSON 저장 ===")
-
     def process_multiple_pages(self, images_dir: str, output_dir: str):
         """전체 파이프라인 실행"""
         # Step 1: 모든 이미지 Crop
@@ -357,9 +260,6 @@ class LLMDBPipeline:
             self.crop_page(str(img), Path(output_dir))
         
         logger.info(f"=== Step 1 완료: Crop 저장 ===")
-        
-        # Step 2: output_dir에서 모든 이미지 OCR
-        self.ocr_all_pages(output_dir)
 
 # -----------------------------------------------------------
 # 실행 예시
@@ -368,11 +268,10 @@ if __name__ == "__main__":
     import os
 
     model_dir = "./models/Detection/Model_routing_1004"
-    output_json_path = "./DB/questions_1.json"
     images_dir = "./DB/images/database1"
     output_dir = "./DB/output/database1"
 
-    pipeline = LLMDBPipeline(model_dir, output_json_path)
+    pipeline = LLMDBPipeline(model_dir)
     pipeline.process_multiple_pages(images_dir, output_dir)
 
     logger.info("전체 파이프라인 실행 완료 ✅")

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import cv2
 import numpy as np
-from models.Detection.Model_routing_1104.run_routed_inference import RoutedInference
+from models.Detection.Model_routing_1111.infer_and_evaluate import RoutedInference
 from models.Recognition.ocr import OCRModel
 
 logging.basicConfig(

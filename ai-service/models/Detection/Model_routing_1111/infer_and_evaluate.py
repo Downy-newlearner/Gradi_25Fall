@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# infer_and_evaluate.py
 """
 라우팅 추론 및 평가 스크립트
 큰 객체 탐지 -> 작은 객체 탐지 -> 후처리 순서로 실행
@@ -67,8 +67,8 @@ class RoutedInference:
         self.model_dir = Path(model_dir)
         
         # 모델 경로
-        self.large_model_path = self.model_dir / "best_big_objects.pt"
-        self.small_model_path = self.model_dir / "best_small_objects.pt"
+        self.large_model_path = self.model_dir / "models" / "best_big_objects.pt"
+        self.small_model_path = self.model_dir / "models" / "best_small_objects.pt"
         
         # 모델 로드
         print(f"📦 큰 객체 모델 로딩: {self.large_model_path}")
@@ -86,7 +86,7 @@ class RoutedInference:
         
         # 추론 파라미터
         self.large_conf = 0.5
-        self.small_conf = 0.5
+        self.small_conf = 0.4
         self.iou_threshold = 0.5  # 겹침 제거를 위한 IOU 임계값
     
     def _load_model(self, model_path: Path):
@@ -501,4 +501,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

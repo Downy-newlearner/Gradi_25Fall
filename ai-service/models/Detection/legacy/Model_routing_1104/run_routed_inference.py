@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-라우팅 추론 스크립트 (Post-processing 통합)
+라우팅 추론 스크립트
 YOLOv8n (큰 객체)과 YOLOv8s (작은 객체) 모델을 결합하여 추론을 수행합니다.
-section 검출 후 post-processing을 적용하여 영역을 정교하게 조정합니다.
+각 클래스별로 가장 높은 신뢰도의 바운딩박스만 선택합니다.
 """
 
 import os
@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import List, Dict, Tuple
 from ultralytics import YOLO
 from datetime import datetime
-import copy
 
 # 클래스 라우팅 정의 (1, 2, 3, 4, 5 추가)
 SMALL_CLASSES = {"page_number", "problem_number", "answer_1", "answer_2", "1", "2", "3", "4", "5"}
@@ -27,7 +26,6 @@ CLASS_COLORS = {
     'english_content': (255, 0, 0),    # 빨간색
     'korean_content': (0, 0, 255),     # 파란색
     'section': (255, 255, 0),          # 노란색
-    'original_section': (0, 165, 255), # 주황색 (원본 section)
     
     # 작은 객체 클래스
     'page_number': (255, 0, 255),      # 마젠타
@@ -42,51 +40,6 @@ CLASS_COLORS = {
     '4': (255, 218, 185),              # 피치
     '5': (221, 160, 221)               # 플럼
 }
-
-
-def is_blank_region(image, roi, mean_thresh=240, stddev_thresh=15, edge_ratio_thresh=0.005):
-    """
-    이미지에서 roi 영역이 '공백'인지 판단하는 함수.
-    - image: numpy array (H, W, 3)
-    - roi: (x_min, y_min, x_max, y_max)
-    - mean_thresh: 평균 픽셀 임계값 (default 240)
-    - stddev_thresh: 표준편차 임계값 (default 15)
-    - edge_ratio_thresh: 엣지 비율 임계값 (default 0.005 == 0.5%)
-    """
-    x_min, y_min, x_max, y_max = roi
-
-    # ROI를 이미지 크기 내로 clip
-    h, w = image.shape[:2]
-    x_min = max(0, int(round(x_min)))
-    y_min = max(0, int(round(y_min)))
-    x_max = min(w, int(round(x_max)))
-    y_max = min(h, int(round(y_max)))
-
-    if x_max <= x_min or y_max <= y_min:
-        return True  # 잘못된 ROI는 공백으로 간주
-
-    roi_img = image[y_min:y_max, x_min:x_max]
-
-    # Gray 변환
-    if len(roi_img.shape) == 3:
-        roi_gray = cv2.cvtColor(roi_img, cv2.COLOR_BGR2GRAY)
-    else:
-        roi_gray = roi_img
-
-    mean = np.mean(roi_gray)
-    stddev = np.std(roi_gray)
-
-    # Canny Edge
-    v = np.median(roi_gray)
-    lower = int(max(0, 0.66 * v))
-    upper = int(min(255, 1.33 * v))
-    edges = cv2.Canny(roi_gray, lower, upper)
-    edge_ratio = np.sum(edges > 0) / (roi_gray.shape[0]*roi_gray.shape[1]+1e-5)
-
-    # 공백 판정
-    result = (mean >= mean_thresh and stddev <= stddev_thresh and edge_ratio <= edge_ratio_thresh)
-    return result
-
 
 class RoutedInference:
     def __init__(self, base_dir: str):
@@ -106,9 +59,6 @@ class RoutedInference:
         self.small_conf = 0.22
         self.large_conf = 0.12
         
-        # Post-processing 파라미터
-        self.roi_height = 60
-        
         print(f"✅ Small model loaded: {self.small_model_path}")
         print(f"✅ Large model loaded: {self.large_model_path}")
     
@@ -122,7 +72,7 @@ class RoutedInference:
     
     def get_all_detections(self, results, class_names: List[str]) -> List[Dict]:
         """
-        모든 검출 결과를 반환
+        모든 검출 결과를 반환 (클래스별 최고 신뢰도 선택 제거)
         """
         all_detections = []
         
@@ -144,103 +94,11 @@ class RoutedInference:
         
         return all_detections
     
-    def apply_section_postprocessing(self, image: np.ndarray, detections: List[Dict]) -> List[Dict]:
-        """
-        Section에 대해 post-processing 적용
-        """
-        # problem_number의 왼쪽 위 좌표 수집
-        question_numbers = []
-        for det in detections:
-            if det['class_name'] == 'problem_number':
-                question_numbers.append((det['bbox'][0], det['bbox'][1]))
-        
-        print(f"  📌 발견된 problem_number: {len(question_numbers)}개")
-        
-        # 결과 저장용 리스트
-        processed_detections = []
-        
-        # section 이외의 객체들은 그대로 유지
-        for det in detections:
-            if det['class_name'] != 'section':
-                processed_detections.append(det)
-        
-        # section에 대해 post-processing 적용
-        for det in detections:
-            if det['class_name'] != 'section':
-                continue
-            
-            # 원본 section 저장
-            original_section = copy.deepcopy(det)
-            original_section['class_name'] = 'original_section'
-            processed_detections.append(original_section)
-            
-            # 처리할 section 복사
-            section = copy.deepcopy(det)
-            x_min, y_min, x_max, y_max = section['bbox']
-            
-            print(f"  🔧 Section 처리 시작: bbox=({x_min:.1f}, {y_min:.1f}, {x_max:.1f}, {y_max:.1f})")
-            
-            # 1. 가장 가까운 problem_number에 왼쪽 위 맞추기
-            if question_numbers:
-                min_dist = float('inf')
-                nearest_qn = None
-                for qn_x, qn_y in question_numbers:
-                    dist = np.sqrt((qn_x - x_min)**2 + (qn_y - y_min)**2)
-                    if dist < min_dist:
-                        min_dist = dist
-                        nearest_qn = (qn_x, qn_y)
-                
-                if nearest_qn is not None:
-                    x_min = max(0, nearest_qn[0] - 20)  # 조정값
-                    y_min = nearest_qn[1]
-                    print(f"    ↔️ problem_number 정렬: ({nearest_qn[0]:.1f}, {nearest_qn[1]:.1f})")
-            
-            # 2. 위쪽 확장
-            print(f"    ⬆️ 위쪽 확장 시작")
-            while True:
-                if y_min - self.roi_height/2 < 0:
-                    break
-                
-                top_upside_roi = [x_min, y_min - self.roi_height/2, x_max, y_min]
-                
-                if not is_blank_region(image, top_upside_roi):
-                    y_min -= self.roi_height/2
-                    print(f"      ⬆️ 위로 확장: y_min={y_min:.1f}")
-                else:
-                    break
-            
-            # 3. 아래쪽 확장
-            print(f"    ⬇️ 아래쪽 확장 시작")
-            while True:
-                if y_max + self.roi_height/2 > image.shape[0]:
-                    break
-                
-                bottom_downside_roi = [x_min, y_max, x_max, y_max + self.roi_height/2]
-                
-                if not is_blank_region(image, bottom_downside_roi):
-                    y_max += self.roi_height/2
-                    print(f"      ⬇️ 아래로 확장: y_max={y_max:.1f}")
-                else:
-                    break
-            
-            # 교정된 section 저장
-            section['bbox'] = [x_min, y_min, x_max, y_max]
-            processed_detections.append(section)
-            
-            print(f"  ✅ Section 처리 완료: bbox=({x_min:.1f}, {y_min:.1f}, {x_max:.1f}, {y_max:.1f})")
-        
-        return processed_detections
-    
     def route_infer_single_image(self, image_path: str) -> Dict:
         """
-        단일 이미지에 대해 라우팅 추론 수행 (post-processing 포함)
+        단일 이미지에 대해 라우팅 추론 수행
         """
-        # 이미지 로드
-        image = cv2.imread(str(image_path))
-        if image is None:
-            raise ValueError(f"이미지를 로드할 수 없습니다: {image_path}")
-        
-        # 작은 객체 모델 추론 (YOLOv8s @ 2048)
+        # 작은 객체 모델 추론 (YOLOv8s @ 2048) - 1, 2, 3, 4, 5 클래스 추가
         small_results = self.small_model(str(image_path), imgsz=2048, conf=self.small_conf, verbose=False)[0]
         small_class_names = ['page_number', 'problem_number', 'answer_1', 'answer_2', '1', '2', '3', '4', '5']
         small_detections = self.get_all_detections(small_results, small_class_names)
@@ -253,13 +111,9 @@ class RoutedInference:
         # 결과 병합
         all_detections = small_detections + large_detections
         
-        # Section에 대해 post-processing 적용
-        print(f"  🔄 Section post-processing 적용")
-        processed_detections = self.apply_section_postprocessing(image, all_detections)
-        
         return {
             'image_path': str(image_path),
-            'detections': processed_detections,
+            'detections': all_detections,
             'small_detections': small_detections,
             'large_detections': large_detections,
             'timestamp': datetime.now().isoformat()
@@ -285,18 +139,8 @@ class RoutedInference:
             # 바운딩 박스 좌표
             x1, y1, x2, y2 = map(int, bbox)
             
-            # 바운딩 박스 그리기 (original_section은 점선으로)
-            if class_name == 'original_section':
-                # 점선 효과 (선분을 여러 개 그려서 점선처럼 보이게)
-                dash_length = 10
-                for i in range(x1, x2, dash_length * 2):
-                    cv2.line(image, (i, y1), (min(i + dash_length, x2), y1), color, 2)
-                    cv2.line(image, (i, y2), (min(i + dash_length, x2), y2), color, 2)
-                for i in range(y1, y2, dash_length * 2):
-                    cv2.line(image, (x1, i), (x1, min(i + dash_length, y2)), color, 2)
-                    cv2.line(image, (x2, i), (x2, min(i + dash_length, y2)), color, 2)
-            else:
-                cv2.rectangle(image, (x1, y1), (x2, y2), color, 3)
+            # 바운딩 박스 그리기
+            cv2.rectangle(image, (x1, y1), (x2, y2), color, 3)
             
             # 라벨 텍스트
             label = f"{class_name}: {confidence:.3f}"
@@ -454,9 +298,9 @@ class RoutedInference:
         print(f"🔍 {len(image_files)}개 이미지에 대해 라우팅 추론 시작...")
         
         for i, image_path in enumerate(image_files):
-            print(f"\n처리 중: {i+1}/{len(image_files)} - {image_path.name}")
+            print(f"처리 중: {i+1}/{len(image_files)} - {image_path.name}")
             
-            # 라우팅 추론 수행 (post-processing 포함)
+            # 라우팅 추론 수행
             result = self.route_infer_single_image(str(image_path))
             all_results.append(result)
             
@@ -499,9 +343,7 @@ class RoutedInference:
                 "large_objects": list(LARGE_CLASSES),
                 "small_model_conf": self.small_conf,
                 "large_model_conf": self.large_conf
-            },
-            "postprocessing_applied": True,
-            "roi_height": self.roi_height
+            }
         }
         
         summary_path = output_path / "routing_results_summary.json"
@@ -515,7 +357,6 @@ class RoutedInference:
         print(f"  - 총 검출 수: {summary['total_detections']}")
         print(f"  - 이미지당 평균 검출 수: {summary['average_detections_per_image']:.1f}")
         print(f"  - 평균 신뢰도: {summary['average_confidence']:.3f}")
-        print(f"  - Post-processing 적용: ✅")
         print("\n📈 클래스별 검출 수:")
         for class_name, count in summary['class_counts'].items():
             print(f"  - {class_name}: {count}")
@@ -534,7 +375,7 @@ def main():
     test_data_root = current_dir.parent.parent / "recognition" / "exp_images"
     output_dir = current_dir / "routed_inference_results"
     
-    print("🚀 라우팅 추론 시작 (Post-processing 포함)")
+    print("🚀 라우팅 추론 시작")
     print(f"📁 테스트 데이터: {test_data_root}")
     print(f"📁 출력 디렉토리: {output_dir}")
     print("=" * 60)
@@ -544,7 +385,7 @@ def main():
         router = RoutedInference(str(current_dir))
         results = router.process_test_images(str(test_data_root), str(output_dir))
         
-        print("\n✅ 라우팅 추론 완료!")
+        print("✅ 라우팅 추론 완료!")
         
     except Exception as e:
         print(f"❌ 오류 발생: {e}")
