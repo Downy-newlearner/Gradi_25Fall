@@ -6,6 +6,7 @@ import 'dart:io';
 import '../../widgets/back_button.dart' as custom;
 import '../../widgets/page_title.dart';
 import '../../widgets/next_button.dart';
+import '../../config/api_config.dart';
 
 class SignUpTermsPage extends StatefulWidget {
   const SignUpTermsPage({super.key});
@@ -271,8 +272,7 @@ class _SignUpTermsPageState extends State<SignUpTermsPage> {
       HttpOverrides.global = _MyHttpOverrides();
 
       // 서버 IP 설정
-      const String serverIp = '3.34.214.133';
-      const String url = 'https://$serverIp/sign-up';
+      final url = ApiConfig.getSignUpUri();
 
       // 이미지의 JSON 형식에 맞춰 요청 데이터 준비
       final Map<String, String> requestData = {
@@ -288,7 +288,7 @@ class _SignUpTermsPageState extends State<SignUpTermsPage> {
 
       // HTTP POST 요청
       final response = await http.post(
-        Uri.parse(url),
+        url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestData),
       );

@@ -8,7 +8,10 @@ import '../../widgets/input_field.dart';
 import '../../widgets/login_button.dart';
 import '../../widgets/sns_button.dart';
 import '../../widgets/links_section.dart';
+import '../../services/auth_service.dart';
+import '../../services/user_service.dart';
 import '../../widgets/sns_divider.dart';
+import '../../config/api_config.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -77,9 +80,8 @@ class _LoginPageState extends State<LoginPage> {
       // 개발 환경에서 SSL 인증서 검증 우회 (프로덕션에서는 제거 필요)
       HttpOverrides.global = MyHttpOverrides();
 
-      // 서버 IP 설정 (필요에 따라 변경)
-      const String serverIp = '3.34.214.133'; // 실제 서버 IP로 변경해주세요
-      const String url = 'https://$serverIp/sign-in';
+      // API URL (ApiConfig에서 중앙 관리)
+      final url = ApiConfig.getSignInUri();
 
       // 이미지 JSON 형식에 맞춰 요청 데이터 준비
       final Map<String, String> requestData = {
@@ -95,7 +97,7 @@ class _LoginPageState extends State<LoginPage> {
 
       // HTTP POST 요청
       final response = await http.post(
-        Uri.parse(url),
+        url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestData),
       );
@@ -116,14 +118,27 @@ class _LoginPageState extends State<LoginPage> {
 
           if (responseData['accessToken'] != null &&
               responseData['refreshToken'] != null) {
-            // 토큰 저장 (향후 SecureStorage 사용 권장)
+            // 토큰 저장
             final accessToken = responseData['accessToken'];
             final refreshToken = responseData['refreshToken'];
-            // final grantType = responseData['grantType'] ?? 'Bearer'; // 향후 사용 예정
 
-            developer.log('Login successful - tokens received');
+            // AuthService를 사용하여 토큰 저장
+            final authService = AuthService();
+            await authService.saveAccessToken(accessToken);
+            await authService.saveRefreshToken(refreshToken);
+
+            developer.log('Login successful - tokens received and saved');
             developer.log('Access Token: ${accessToken.substring(0, 20)}...');
             developer.log('Refresh Token: ${refreshToken.substring(0, 20)}...');
+
+            // 사용자 정보 가져오기
+            try {
+              await UserService().fetchUserFromServer();
+              developer.log('User info fetched successfully after login');
+            } catch (e) {
+              developer.log('Failed to fetch user info after login: $e');
+              // 사용자 정보 가져오기 실패해도 로그인은 성공으로 처리
+            }
 
             // 메인 네비게이션 화면으로 이동
             if (mounted) {
@@ -145,7 +160,7 @@ class _LoginPageState extends State<LoginPage> {
             ).showSnackBar(const SnackBar(content: Text('서버 응답을 처리할 수 없습니다')));
           }
         }
-      } else if (response.statusCode == 401) {
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
         // 인증 실패
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

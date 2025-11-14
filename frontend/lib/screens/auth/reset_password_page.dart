@@ -7,6 +7,7 @@ import '../../widgets/back_button.dart' as custom;
 import '../../widgets/page_title.dart';
 import '../../widgets/input_field.dart';
 import '../../widgets/next_button.dart';
+import '../../config/api_config.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   const ResetPasswordPage({super.key});
@@ -199,8 +200,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       HttpOverrides.global = MyHttpOverrides();
 
       // 서버 IP 설정 (필요에 따라 변경)
-      const String serverIp = '3.34.214.133'; // 실제 서버 IP로 변경해주세요
-      const String url = 'https://$serverIp/users/reset-password';
+      final url = ApiConfig.getResetPasswordUri();
 
       // 요청 데이터 준비
       final Map<String, String> requestData = {
@@ -212,7 +212,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
       // API 호출
       final response = await http.post(
-        Uri.parse(url),
+        url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestData),
       );

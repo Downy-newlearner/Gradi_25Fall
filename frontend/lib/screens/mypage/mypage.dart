@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_header_title.dart';
 import '../../widgets/app_header_menu_button.dart';
+import '../../services/user_service.dart';
+import '../../models/user.dart';
 
 /// 마이페이지
 /// 사용자 프로필, 학습 현황, 각종 설정 메뉴를 제공하는 페이지
@@ -19,9 +21,46 @@ class MyPage extends StatefulWidget {
 }
 
 class _MyPageState extends State<MyPage> {
-  // TODO: 서버에서 사용자 정보 가져오기
-  String _userName = '최윤정';
+  // UserService에서 사용자 정보 가져오기
+  String _userName = '게스트';
   String? _profileImageUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+
+    // 리스너 등록 (프로필 수정 시 자동 업데이트)
+    UserService().addListener(_onUserChanged);
+  }
+
+  @override
+  void dispose() {
+    // 리스너 제거
+    UserService().removeListener(_onUserChanged);
+    super.dispose();
+  }
+
+  /// UserService에서 사용자 정보 로드
+  void _loadUserData() {
+    final user = UserService().getUser();
+    if (user != null) {
+      setState(() {
+        _userName = user.name;
+        _profileImageUrl = user.profileImageUrl;
+      });
+    }
+  }
+
+  /// 사용자 정보 변경 리스너
+  void _onUserChanged(User? user) {
+    if (user != null && mounted) {
+      setState(() {
+        _userName = user.name;
+        _profileImageUrl = user.profileImageUrl;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

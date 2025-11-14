@@ -7,6 +7,7 @@ import '../../widgets/back_button.dart' as custom;
 import '../../widgets/page_title.dart';
 import '../../widgets/labeled_input_field.dart';
 import '../../widgets/next_button.dart';
+import '../../config/api_config.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -274,17 +275,15 @@ class _SignUpPageState extends State<SignUpPage> {
     try {
       HttpOverrides.global = _MyHttpOverrides();
 
-      const String serverIp = '3.34.214.133';
       final String accountId = _idController.text.trim();
-      final String url =
-          'https://$serverIp/users/check-accountId?accountId=$accountId';
+      final url = ApiConfig.getCheckAccountIdUri(accountId);
 
       developer.log('GET $url');
       developer.log('Checking account ID: $accountId');
 
       // HTTP GET 요청
       final response = await http.get(
-        Uri.parse(url),
+        url,
         headers: {'Content-Type': 'application/json'},
       );
 
@@ -369,8 +368,7 @@ class _SignUpPageState extends State<SignUpPage> {
     try {
       HttpOverrides.global = _MyHttpOverrides();
 
-      const String serverIp = '3.34.214.133';
-      final String url = 'https://$serverIp/send-code/sign_up';
+      final url = ApiConfig.getSendCodeSignUpUri();
       final Map<String, String> requestData = {
         'email': _emailController.text.trim(),
       };
@@ -379,7 +377,7 @@ class _SignUpPageState extends State<SignUpPage> {
       developer.log('Request: $requestData');
 
       final response = await http.post(
-        Uri.parse(url),
+        url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestData),
       );
@@ -452,8 +450,7 @@ class _SignUpPageState extends State<SignUpPage> {
     try {
       HttpOverrides.global = _MyHttpOverrides();
 
-      const String serverIp = '3.34.214.133';
-      final String url = 'https://$serverIp/verify/sign_up';
+      final url = ApiConfig.getVerifySignUpUri();
 
       setState(() {
         _isVerifyingEmailCode = true;
@@ -472,7 +469,7 @@ class _SignUpPageState extends State<SignUpPage> {
       developer.log('Request body: ${json.encode(requestData)}');
 
       final response = await http.post(
-        Uri.parse(url),
+        url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestData),
       );

@@ -4,6 +4,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
 import 'services/fcm_service.dart';
+import 'services/auth_service.dart';
+import 'services/user_service.dart';
 import 'routes/app_routes.dart';
 import 'theme/app_theme.dart';
 
@@ -47,6 +49,20 @@ void main() async {
     // FCM 초기화 실패해도 앱은 계속 실행
   }
 
+  // 사용자 정보 초기화 (로그인 상태일 경우)
+  try {
+    final isLoggedIn = await AuthService().isLoggedIn();
+    if (isLoggedIn) {
+      await UserService().initialize();
+      debugPrint('✅ 사용자 정보 초기화 완료');
+    } else {
+      debugPrint('ℹ️ 로그인되지 않은 상태 - 사용자 정보 초기화 스킵');
+    }
+  } catch (e) {
+    debugPrint('❌ 사용자 정보 초기화 실패: $e');
+    // 사용자 정보 초기화 실패해도 앱은 계속 실행
+  }
+
   // 세로 방향 고정
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -77,7 +93,7 @@ class GradiApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
 
       // Routing configuration
-      initialRoute: '/', // MainNavigationPage로 시작
+      initialRoute: AppRoutes.login, // 로그인 페이지로 시작
       routes: AppRoutes.routes,
       onGenerateRoute: AppRoutes.onGenerateRoute,
 
