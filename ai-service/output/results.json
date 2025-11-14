@@ -1,7 +1,0 @@
-{
-  "model_path": "models/Detection/Model_routing_1104/yolov8n_imgsz_1280/yolov8n.pt",
-  "total_images": 0,
-  "correct_predictions": 0,
-  "accuracy": 0,
-  "results": []
-}

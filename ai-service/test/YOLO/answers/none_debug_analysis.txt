@@ -2,12 +2,12 @@
 None 답안 디버깅 분석
 ================================================================================
 
-총 3개의 None 답안 발견
+총 1개의 None 답안 발견
 
 📊 원인별 통계:
-  - answer_1 미검출: 2개 (66.7%)
-  - 숫자(1-5) 미검출: 1개 (33.3%)
-  - IoU 0 (위치 불일치): 1개 (33.3%)
+  - answer_1 미검출: 0개 (0.0%)
+  - 숫자(1-5) 미검출: 0개 (0.0%)
+  - IoU 0 (위치 불일치): 1개 (100.0%)
 
 
 ================================================================================
@@ -33,37 +33,3 @@ None 답안 디버깅 분석
   📁 관련 파일:
      Section 이미지: /home/yerim/workspace/Gradi_25Fall/ai-service/test/YOLO/images/test_results/학생이 푼 문제(실전 모의고사) - 18/sections/section_00.jpg
      문제번호 이미지: /home/yerim/workspace/Gradi_25Fall/ai-service/test/YOLO/images/test_results/학생이 푼 문제(실전 모의고사) - 18/problem_numbers/section_00_problem_number.jpg
-
-================================================================================
-[2] 페이지: 학생이 푼 문제(유형편) - 10 (페이지번호: 19)
-    Section: 1, 문제번호: 05
---------------------------------------------------------------------------------
-  📋 검출 정보:
-     answer_1 검출 개수: 0
-     숫자(1-5) 검출 개수: 0
-     최고 IoU: 0.0000
-
-  🔍 원인 분석:
-     ❌ answer_1이 검출되지 않음 (1104 모델 문제)
-     → 해결방법: 1104 모델 재학습 또는 confidence threshold 조정
-
-  📁 관련 파일:
-     Section 이미지: /home/yerim/workspace/Gradi_25Fall/ai-service/test/YOLO/images/test_results/학생이 푼 문제(유형편) - 10/sections/section_01.jpg
-     문제번호 이미지: /home/yerim/workspace/Gradi_25Fall/ai-service/test/YOLO/images/test_results/학생이 푼 문제(유형편) - 10/problem_numbers/section_01_problem_number.jpg
-
-================================================================================
-[3] 페이지: 학생이 푼 문제(유형편) - 32 (페이지번호: 46)
-    Section: 0, 문제번호: 02
---------------------------------------------------------------------------------
-  📋 검출 정보:
-     answer_1 검출 개수: 0
-     숫자(1-5) 검출 개수: 4
-     최고 IoU: 0.0000
-
-  🔍 원인 분석:
-     ❌ answer_1이 검출되지 않음 (1104 모델 문제)
-     → 해결방법: 1104 모델 재학습 또는 confidence threshold 조정
-
-  📁 관련 파일:
-     Section 이미지: /home/yerim/workspace/Gradi_25Fall/ai-service/test/YOLO/images/test_results/학생이 푼 문제(유형편) - 32/sections/section_00.jpg
-     문제번호 이미지: /home/yerim/workspace/Gradi_25Fall/ai-service/test/YOLO/images/test_results/학생이 푼 문제(유형편) - 32/problem_numbers/section_00_problem_number.jpg

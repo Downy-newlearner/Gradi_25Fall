@@ -107,7 +107,7 @@ class RoutedInference:
         self.large_conf = 0.12
         
         # Post-processing 파라미터
-        self.roi_height = 60
+        self.roi_height = 60  # 첫 번째 확장은 40px(roi_height/2), 이후는 10px씩
         
         print(f"✅ Small model loaded: {self.small_model_path}")
         print(f"✅ Large model loaded: {self.large_model_path}")
@@ -147,14 +147,82 @@ class RoutedInference:
     def apply_section_postprocessing(self, image: np.ndarray, detections: List[Dict]) -> List[Dict]:
         """
         Section에 대해 post-processing 적용
+        - section이 없으면 problem_number 기반으로 생성
         """
         # problem_number의 왼쪽 위 좌표 수집
         question_numbers = []
         for det in detections:
             if det['class_name'] == 'problem_number':
-                question_numbers.append((det['bbox'][0], det['bbox'][1]))
+                question_numbers.append({
+                    'bbox': det['bbox'],
+                    'confidence': det['confidence']
+                })
+        
+        # section 검출 결과
+        section_detections = [det for det in detections if det['class_name'] == 'section']
         
         print(f"  📌 발견된 problem_number: {len(question_numbers)}개")
+        print(f"  📦 발견된 section: {len(section_detections)}개")
+        
+        # section이 없지만 problem_number가 있는 경우 → section 생성
+        if len(section_detections) == 0 and len(question_numbers) > 0:
+            print(f"  ⚠️ Section이 없지만 problem_number가 있음 → Section 자동 생성")
+            
+            for idx, qn in enumerate(question_numbers):
+                qn_bbox = qn['bbox']
+                qn_x1, qn_y1, qn_x2, qn_y2 = qn_bbox
+                
+                # 1. problem_number의 왼쪽 상단 꼭짓점 기준으로 초기 확장 (좌측 10px, 상단 10px)
+                section_x1 = max(0, qn_x1 - 10)
+                section_y1 = max(0, qn_y1 - 10)
+
+                # 2. 오른쪽으로 30px, 아래쪽으로 30px 확장
+                h, w = image.shape[:2]
+                section_x2 = min(w, section_x1 + 600)
+                section_y2 = min(h, section_y1 + 900)
+                
+                # 3. ROI 기반 오른쪽 확장 (5px씩)
+                right_expansion_count = 0
+                max_expansions = 1000  # 최대 확장 횟수
+                
+                while right_expansion_count < max_expansions:
+                    if section_x2 + 5 > w:
+                        break
+                    
+                    right_roi = [section_x2, section_y1, section_x2 + 5, section_y2]
+                    
+                    if not is_blank_region(image, right_roi):
+                        section_x2 += 5
+                        right_expansion_count += 1
+                    else:
+                        break
+                
+                # 4. ROI 기반 아래쪽 확장 (5px씩)
+                bottom_expansion_count = 0
+                
+                while bottom_expansion_count < max_expansions:
+                    if section_y2 + 5 > h:
+                        break
+                    
+                    bottom_roi = [section_x1, section_y2, section_x2, section_y2 + 5]
+                    
+                    if not is_blank_region(image, bottom_roi):
+                        section_y2 += 5
+                        bottom_expansion_count += 1
+                    else:
+                        break
+                
+                # 생성된 section을 detections에 추가
+                generated_section = {
+                    'class_name': 'section',
+                    'class_id': 3,  # section의 class_id
+                    'confidence': qn['confidence'],  # problem_number의 confidence 사용
+                    'bbox': [section_x1, section_y1, section_x2, section_y2],
+                    'generated': True  # 생성된 section임을 표시
+                }
+                
+                section_detections.append(generated_section)
+                print(f"       ✅ Section 생성 완료: [{section_x1:.1f}, {section_y1:.1f}, {section_x2:.1f}, {section_y2:.1f}]")
         
         # 결과 저장용 리스트
         processed_detections = []
@@ -165,8 +233,11 @@ class RoutedInference:
                 processed_detections.append(det)
         
         # section에 대해 post-processing 적용
-        for det in detections:
-            if det['class_name'] != 'section':
+        for det in section_detections:
+            if det.get('generated', False):
+                # 생성된 section은 이미 확장이 완료됨
+                processed_detections.append(det)
+                print(f"  ✨ 생성된 Section 추가 완료")
                 continue
             
             # 원본 section 저장
@@ -184,7 +255,8 @@ class RoutedInference:
             if question_numbers:
                 min_dist = float('inf')
                 nearest_qn = None
-                for qn_x, qn_y in question_numbers:
+                for qn in question_numbers:
+                    qn_x, qn_y = qn['bbox'][0], qn['bbox'][1]
                     dist = np.sqrt((qn_x - x_min)**2 + (qn_y - y_min)**2)
                     if dist < min_dist:
                         min_dist = dist
@@ -195,32 +267,60 @@ class RoutedInference:
                     y_min = nearest_qn[1]
                     print(f"    ↔️ problem_number 정렬: ({nearest_qn[0]:.1f}, {nearest_qn[1]:.1f})")
             
-            # 2. 위쪽 확장
-            print(f"    ⬆️ 위쪽 확장 시작")
+            # 2. 위쪽 확장 (첫 번째: 40px, 이후: 10px씩)
+            print(f"    ⬆️ 위쪽 확장 시작 (첫 번째: 40px, 이후: 10px씩)")
+            expansion_count = 0
+            
             while True:
-                if y_min - self.roi_height/2 < 0:
+                # 첫 번째 확장은 40px (roi_height/2), 이후는 10px씩
+                if expansion_count == 0:
+                    expansion_size = self.roi_height
+                else:
+                    expansion_size = 10
+                
+                if y_min - expansion_size < 0:
+                    print(f"      ⛔ 이미지 상단 경계 도달 ({expansion_count}번 확장 후)")
                     break
                 
-                top_upside_roi = [x_min, y_min - self.roi_height/2, x_max, y_min]
+                top_upside_roi = [x_min, y_min - expansion_size, x_max, y_min]
                 
                 if not is_blank_region(image, top_upside_roi):
-                    y_min -= self.roi_height/2
-                    print(f"      ⬆️ 위로 확장: y_min={y_min:.1f}")
+                    y_min -= expansion_size
+                    expansion_count += 1
+                    if expansion_count == 1:
+                        print(f"      ⬆️ 위로 확장 (1차: 40px): y_min={y_min:.1f}")
+                    else:
+                        print(f"      ⬆️ 위로 확장 ({expansion_count}차: 10px): y_min={y_min:.1f}")
                 else:
+                    print(f"      ⏹️ 공백 영역 도달 ({expansion_count}번 확장 후)")
                     break
             
-            # 3. 아래쪽 확장
-            print(f"    ⬇️ 아래쪽 확장 시작")
+            # 3. 아래쪽 확장 (첫 번째: 40px, 이후: 10px씩)
+            print(f"    ⬇️ 아래쪽 확장 시작 (첫 번째: 40px, 이후: 10px씩)")
+            expansion_count = 0
+            
             while True:
-                if y_max + self.roi_height/2 > image.shape[0]:
+                # 첫 번째 확장은 40px (roi_height/2), 이후는 10px씩
+                if expansion_count == 0:
+                    expansion_size = self.roi_height
+                else:
+                    expansion_size = 10
+                
+                if y_max + expansion_size > image.shape[0]:
+                    print(f"      ⛔ 이미지 하단 경계 도달 ({expansion_count}번 확장 후)")
                     break
                 
-                bottom_downside_roi = [x_min, y_max, x_max, y_max + self.roi_height/2]
+                bottom_downside_roi = [x_min, y_max, x_max, y_max + expansion_size]
                 
                 if not is_blank_region(image, bottom_downside_roi):
-                    y_max += self.roi_height/2
-                    print(f"      ⬇️ 아래로 확장: y_max={y_max:.1f}")
+                    y_max += expansion_size
+                    expansion_count += 1
+                    if expansion_count == 1:
+                        print(f"      ⬇️ 아래로 확장 (1차: 40px): y_max={y_max:.1f}")
+                    else:
+                        print(f"      ⬇️ 아래로 확장 ({expansion_count}차: 10px): y_max={y_max:.1f}")
                 else:
+                    print(f"      ⏹️ 공백 영역 도달 ({expansion_count}번 확장 후)")
                     break
             
             # 교정된 section 저장

@@ -34,10 +34,8 @@ def main():
     model_dir_1104 = current_dir.parent.parent / "models" / "Detection" / "legacy" / "Model_routing_1104"
     model_dir_1004 = current_dir.parent.parent / "models" / "Detection" / "legacy" / "Model_routing_1004"
 
-    # 답지 파일 경로 (필요한 경우 수정)
-    # 답지 형식: 페이지번호, 문제번호, 정답 (각 줄마다 쉼표로 구분)
-    # 예: 1, 1, 3
-    answer_key_path = current_dir / "answers" / "answer.txt"  # 답지 파일 경로
+    # 답지 파일 경로
+    answer_key_path = current_dir / "answers" / "answer.txt"
     
     # 답지 파일이 없으면 None으로 설정 (모든 페이지 처리)
     if not answer_key_path.exists():
@@ -54,11 +52,11 @@ def main():
     logger.info(f"1004 모델 디렉토리: {model_dir_1004}")
     logger.info(f"답지 파일: {answer_key_path}")
 
-    # 파이프라인 초기화 (section_padding 증가, 답지 파일 추가)
+    # 파이프라인 초기화
     pipeline = HierarchicalCropPipeline(
         str(model_dir_1104), 
         str(model_dir_1004),
-        section_padding=50,  # 20 → 50으로 증가
+        section_padding=50,
         answer_key_path=str(answer_key_path) if answer_key_path else None
     )
 
@@ -106,7 +104,9 @@ def main():
     # 요약 및 결과 저장
     print_summary(all_results, skipped_pages, output_dir, total_processing_time)
     save_results_txt(all_results, output_dir)
-    save_none_analysis(all_results, output_dir)  # ✨ None 분석 추가
+    save_none_analysis(all_results, output_dir)
+    save_crop_failure_analysis(all_results, output_dir)
+    check_missing_sections_against_answer_key(all_results, output_dir, pipeline.answer_key)  # ✨ 답지 기반 누락 검출 추가
 
 
 def save_results_txt(all_results: list, output_dir: Path):
@@ -256,6 +256,434 @@ def save_none_analysis(all_results: list, output_dir: Path):
     logger.info(f"   원인별: answer_1 미검출={answer_1_missing}, 숫자 미검출={class_missing}, IoU=0={iou_zero}")
 
 
+def save_crop_failure_analysis(all_results: list, output_dir: Path):
+    """
+    Section crop 실패 케이스를 분석하여 별도 파일로 저장
+    + 실제 저장된 파일 목록을 검증
+    """
+    analysis_path = output_dir.parent.parent / "answers" / "crop_failure_analysis.txt"
+    
+    crop_failure_cases = []
+    total_expected_sections = 0
+    total_actual_files = 0
+    duplicate_removed_count = 0  # 중복 제거 개수
+    
+    for result in all_results:
+        page_name = result.get("page_name", "")
+        page_num_ocr = result.get("page_number_ocr", "")
+        sections = result.get("sections", [])
+        
+        # 실제 저장된 파일 확인
+        sections_dir = output_dir / page_name / "sections"
+        actual_files = []
+        if sections_dir.exists():
+            actual_files = sorted(sections_dir.glob("section_*.jpg"))
+            total_actual_files += len(actual_files)
+        
+        total_expected_sections += len(sections)
+        
+        for section in sections:
+            if not section.get("crop_success", True):
+                crop_failure_cases.append({
+                    'page_name': page_name,
+                    'page_num': page_num_ocr,
+                    'section_idx': section.get('section_idx'),
+                    'failure_reason': section.get('crop_failure_reason', 'unknown'),
+                    'debug_info': section.get('debug_info', {}),
+                    'expected_path': section.get('section_crop_path')
+                })
+        
+        # 예상 개수와 실제 파일 개수가 다른 경우 경고
+        if len(sections) != len(actual_files):
+            logger.warning(f"⚠️ 페이지 '{page_name}': 예상 section 개수({len(sections)}) ≠ 실제 파일 개수({len(actual_files)})")
+            logger.warning(f"   실제 저장된 파일: {[f.name for f in actual_files]}")
+            
+            # 누락된 section 찾기
+            expected_indices = set(s.get('section_idx') for s in sections)
+            actual_indices = set(int(f.stem.split('_')[1]) for f in actual_files if f.stem.startswith('section_'))
+            missing_indices = expected_indices - actual_indices
+            
+            if missing_indices:
+                logger.error(f"   ❌ 누락된 section 인덱스: {sorted(missing_indices)}")
+                
+                # 누락된 section을 failure case에 추가
+                for idx in missing_indices:
+                    matching_sections = [s for s in sections if s.get('section_idx') == idx]
+                    if matching_sections:
+                        section = matching_sections[0]
+                        if section.get('crop_success', True):  # crop_success=True인데 파일이 없는 경우
+                            crop_failure_cases.append({
+                                'page_name': page_name,
+                                'page_num': page_num_ocr,
+                                'section_idx': idx,
+                                'failure_reason': 'file_not_found_despite_success',
+                                'debug_info': section.get('debug_info', {}),
+                                'expected_path': section.get('section_crop_path')
+                            })
+    
+    logger.info(f"\n📊 Section 파일 검증:")
+    logger.info(f"   예상 section 총 개수: {total_expected_sections}")
+    logger.info(f"   실제 저장된 파일 개수: {total_actual_files}")
+    logger.info(f"   중복 제거된 section: {duplicate_removed_count}개")
+    
+    if total_expected_sections != total_actual_files:
+        logger.error(f"   ❌ 불일치 발견: {total_expected_sections - total_actual_files}개 파일 누락")
+    else:
+        logger.info(f"   ✅ 모든 section 파일이 정상적으로 저장됨")
+    
+    if not crop_failure_cases:
+        logger.info("✅ Section crop 실패 케이스가 없습니다!")
+        with open(analysis_path, "w", encoding="utf-8") as f:
+            f.write("=" * 80 + "\n")
+            f.write("Section Crop 실패 케이스 분석\n")
+            f.write("=" * 80 + "\n\n")
+            if total_expected_sections == total_actual_files:
+                f.write("✅ 모든 Section이 정상적으로 crop되었습니다!\n\n")
+                if duplicate_removed_count > 0:
+                    f.write(f"📊 중복 제거 통계:\n")
+                    f.write(f"   - 중복으로 제거된 section: {duplicate_removed_count}개\n")
+                    f.write(f"   - 같은 문제번호를 가진 section 중 더 큰 것만 선택됨\n")
+            else:
+                f.write(f"⚠️ 일부 파일이 누락되었습니다.\n")
+                f.write(f"   예상: {total_expected_sections}개\n")
+                f.write(f"   실제: {total_actual_files}개\n")
+                f.write(f"   누락: {total_expected_sections - total_actual_files}개\n")
+                if duplicate_removed_count > 0:
+                    f.write(f"\n📊 중복 제거 통계:\n")
+                    f.write(f"   - 중복으로 제거된 section: {duplicate_removed_count}개\n")
+        return
+    
+    with open(analysis_path, "w", encoding="utf-8") as f:
+        f.write("=" * 80 + "\n")
+        f.write("Section Crop 실패 케이스 분석\n")
+        f.write("=" * 80 + "\n\n")
+        f.write(f"총 {len(crop_failure_cases)}개의 Section crop 실패 발견\n")
+        
+        if duplicate_removed_count > 0:
+            f.write(f"\n📊 중복 제거 통계:\n")
+            f.write(f"  - 중복으로 제거된 section: {duplicate_removed_count}개\n")
+            f.write(f"  - 같은 문제번호를 가진 section 중 더 큰 것만 선택됨\n")
+        
+        f.write("\n")
+        
+        # 원인별 통계
+        failure_reasons = {}
+        for case in crop_failure_cases:
+            reason = case['failure_reason']
+            failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+        
+        f.write("📊 실패 원인별 통계:\n")
+        for reason, count in failure_reasons.items():
+            f.write(f"  - {reason}: {count}개 ({count/len(crop_failure_cases)*100:.1f}%)\n")
+        f.write("\n")
+        
+        for i, case in enumerate(crop_failure_cases, 1):
+            f.write(f"\n{'='*80}\n")
+            f.write(f"[{i}] 페이지: {case['page_name']} (페이지번호: {case['page_num']})\n")
+            f.write(f"    Section: {case['section_idx']}\n")
+            f.write(f"{'-'*80}\n")
+            
+            f.write(f"  ❌ 실패 원인: {case['failure_reason']}\n\n")
+            
+            debug = case['debug_info']
+            
+            # 원인별 상세 정보
+            if case['failure_reason'] == 'invalid_bbox':
+                f.write(f"  📋 Bbox 정보:\n")
+                f.write(f"     원본 bbox: {debug.get('original_bbox', 'N/A')}\n")
+                f.write(f"     Bbox 너비: {debug.get('bbox_width', 'N/A'):.1f}\n")
+                f.write(f"     Bbox 높이: {debug.get('bbox_height', 'N/A'):.1f}\n")
+                f.write(f"     이미지 크기: {debug.get('image_size', 'N/A')}\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ❌ Section bbox가 잘못되었습니다 (x2 <= x1 or y2 <= y1)\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. 1004 모델의 Section 검출이 잘못됨 → 모델 재학습 필요\n")
+                f.write(f"        2. Post-processing 오류 → bbox 조정 로직 확인\n")
+            
+            elif case['failure_reason'] == 'invalid_expanded_bbox':
+                f.write(f"  📋 Bbox 정보:\n")
+                f.write(f"     원본 bbox: {debug.get('original_bbox', 'N/A')}\n")
+                f.write(f"     확장 bbox: {debug.get('expanded_bbox', 'N/A')}\n")
+                f.write(f"     Padding: {debug.get('padding', 'N/A')}px\n")
+                f.write(f"     이미지 크기: {debug.get('image_size', 'N/A')}\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ❌ Padding 추가 후 bbox가 잘못됨\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. Padding 값 조정 (현재: {debug.get('padding', 50)}px)\n")
+                f.write(f"        2. 원본 bbox가 이미지 경계 근처에 있는 경우 → 모델 재학습\n")
+            
+            elif case['failure_reason'] == 'zero_size_crop':
+                f.write(f"  📋 Bbox 정보:\n")
+                f.write(f"     원본 bbox: {debug.get('original_bbox', 'N/A')}\n")
+                f.write(f"     확장 bbox: {debug.get('expanded_bbox', 'N/A')}\n")
+                f.write(f"     Crop 크기: {debug.get('crop_size', 'N/A')}\n")
+                f.write(f"     이미지 크기: {debug.get('image_size', 'N/A')}\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ❌ Crop된 이미지의 크기가 0\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. Bbox가 이미지 범위를 벗어남 → clip 로직 확인\n")
+                f.write(f"        2. 원본 bbox가 잘못됨 → 모델 재학습\n")
+            
+            elif case['failure_reason'] == 'file_write_failed':
+                f.write(f"  📋 파일 저장 정보:\n")
+                f.write(f"     원본 bbox: {debug.get('original_bbox', 'N/A')}\n")
+                f.write(f"     확장 bbox: {debug.get('expanded_bbox', 'N/A')}\n")
+                f.write(f"     Crop 크기: {debug.get('crop_size', 'N/A')}\n")
+                f.write(f"     이미지 크기: {debug.get('image_size', 'N/A')}\n")
+                f.write(f"     cv2.imwrite 반환값: {debug.get('write_success', 'N/A')}\n")
+                f.write(f"     파일 존재 여부: {debug.get('file_exists', 'N/A')}\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ❌ 파일 저장에 실패했습니다\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. 디스크 공간 확인\n")
+                f.write(f"        2. 파일 경로 권한 확인\n")
+                f.write(f"        3. 이미지 데이터 유효성 확인\n")
+            
+            elif case['failure_reason'] == 'zero_size_file':
+                f.write(f"  📋 파일 정보:\n")
+                f.write(f"     원본 bbox: {debug.get('original_bbox', 'N/A')}\n")
+                f.write(f"     확장 bbox: {debug.get('expanded_bbox', 'N/A')}\n")
+                f.write(f"     Crop 크기: {debug.get('crop_size', 'N/A')}\n")
+                f.write(f"     이미지 크기: {debug.get('image_size', 'N/A')}\n")
+                f.write(f"     저장된 파일 크기: {debug.get('file_size', 'N/A')} bytes\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ❌ 파일은 저장되었지만 크기가 0 bytes\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. Crop된 이미지 데이터가 비어있음\n")
+                f.write(f"        2. OpenCV imwrite 인코딩 실패\n")
+                f.write(f"        3. 이미지 포맷 문제 확인\n")
+            
+            elif case['failure_reason'] == 'file_not_found_despite_success':
+                f.write(f"  📋 파일 정보:\n")
+                f.write(f"     예상 파일 경로: {case.get('expected_path', 'N/A')}\n")
+                f.write(f"     원본 bbox: {debug.get('original_bbox', 'N/A')}\n")
+                f.write(f"     확장 bbox: {debug.get('expanded_bbox', 'N/A')}\n")
+                f.write(f"     Crop 크기: {debug.get('crop_size', 'N/A')}\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ❌ crop_success=True로 기록되었지만 실제 파일이 없음\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. 파일 저장 후 삭제되었을 가능성 확인\n")
+                f.write(f"        2. 파일 경로 오류 확인\n")
+                f.write(f"        3. 파일 저장 검증 로직 강화 필요\n")
+            
+            elif case['failure_reason'] == 'file_read_failed':
+                f.write(f"  📋 파일 정보:\n")
+                f.write(f"     파일 경로: {debug.get('file_path', 'N/A')}\n")
+                f.write(f"     파일 크기: {debug.get('file_size', 'N/A')} bytes\n")
+                f.write(f"     원본 bbox: {debug.get('original_bbox', 'N/A')}\n")
+                f.write(f"     확장 bbox: {debug.get('expanded_bbox', 'N/A')}\n")
+                f.write(f"     Crop 크기: {debug.get('crop_size', 'N/A')}\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ❌ 파일은 저장되었지만 cv2.imread()로 읽을 수 없음\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. 파일이 손상되었을 가능성\n")
+                f.write(f"        2. 이미지 포맷이 잘못됨 (OpenCV가 지원하지 않는 형식)\n")
+                f.write(f"        3. 저장 중 I/O 에러 발생\n")
+                f.write(f"        4. 파일 경로에 특수문자 포함 여부 확인\n")
+            
+            elif case['failure_reason'] == 'size_mismatch_after_read':
+                f.write(f"  📋 파일 정보:\n")
+                f.write(f"     원본 bbox: {debug.get('original_bbox', 'N/A')}\n")
+                f.write(f"     확장 bbox: {debug.get('expanded_bbox', 'N/A')}\n")
+                f.write(f"     저장 시 Crop 크기: {debug.get('crop_size', 'N/A')}\n")
+                f.write(f"     읽기 후 크기: {debug.get('verify_size', 'N/A')}\n")
+                f.write(f"     파일 크기: {debug.get('file_size', 'N/A')} bytes\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ❌ 저장 시와 읽기 후의 이미지 크기가 다름\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. JPEG 압축 과정에서 문제 발생 가능성\n")
+                f.write(f"        2. 메모리 오염 가능성\n")
+                f.write(f"        3. 다른 포맷(PNG 등)으로 저장 시도\n")
+            
+            elif case['failure_reason'].startswith('verification_exception:'):
+                error_msg = case['failure_reason'][23:]
+                f.write(f"  📋 파일 검증 정보:\n")
+                f.write(f"     원본 bbox: {debug.get('original_bbox', 'N/A')}\n")
+                f.write(f"     확장 bbox: {debug.get('expanded_bbox', 'N/A')}\n")
+                f.write(f"     Crop 크기: {debug.get('crop_size', 'N/A')}\n")
+                f.write(f"     파일 크기: {debug.get('file_size', 'N/A')} bytes\n")
+                f.write(f"     에러 메시지: {error_msg}\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ❌ 파일 검증 중 예외 발생\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. 에러 메시지 확인 및 디버깅\n")
+                f.write(f"        2. 파일 시스템 문제 확인\n")
+                f.write(f"        3. 권한 문제 확인\n")
+            
+            elif case['failure_reason'].startswith('exception:'):
+                error_msg = case['failure_reason'][10:]
+                f.write(f"  📋 Exception 정보:\n")
+                f.write(f"     원본 bbox: {debug.get('original_bbox', 'N/A')}\n")
+                f.write(f"     확장 bbox: {debug.get('expanded_bbox', 'N/A')}\n")
+                f.write(f"     이미지 크기: {debug.get('image_size', 'N/A')}\n")
+                f.write(f"     에러 메시지: {error_msg}\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ❌ Crop 중 예외 발생\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. 에러 메시지 확인 및 디버깅\n")
+                f.write(f"        2. Bbox 범위 확인\n")
+    
+    logger.info(f"📊 Crop 실패 분석 저장 완료: {analysis_path}")
+    logger.info(f"   총 {len(crop_failure_cases)}개 실패 케이스 분석")
+    
+    # 원인별 통계 로그
+    for reason, count in failure_reasons.items():
+        logger.info(f"   {reason}: {count}개")
+
+
+def check_missing_sections_against_answer_key(all_results: list, output_dir: Path, answer_key: dict):
+    """
+    답지와 실제 처리된 section을 비교하여 누락된 문제를 찾아냄
+    """
+    if not answer_key:
+        logger.info("답지가 없어 누락 검출을 건너뜁니다.")
+        return
+    
+    analysis_path = output_dir.parent.parent / "answers" / "missing_sections_analysis.txt"
+    
+    missing_cases = []
+    
+    for result in all_results:
+        page_name = result.get("page_name", "")
+        page_num_ocr = result.get("page_number_ocr", "")
+        sections = result.get("sections", [])
+        
+        # 답지에서 해당 페이지의 문제 개수 확인
+        if page_num_ocr not in answer_key:
+            logger.warning(f"페이지 {page_num_ocr}가 답지에 없습니다.")
+            continue
+        
+        expected_problems = answer_key[page_num_ocr]
+        expected_count = len(expected_problems)
+        actual_count = len(sections)
+        
+        logger.info(f"페이지 {page_num_ocr}: 답지 문제 수={expected_count}, 실제 section 수={actual_count}")
+        
+        if expected_count != actual_count:
+            logger.error(f"❌ 페이지 {page_num_ocr}: 문제 수 불일치!")
+            logger.error(f"   예상: {expected_count}개, 실제: {actual_count}개")
+            logger.error(f"   차이: {expected_count - actual_count}개")
+            
+            # 어떤 문제가 누락되었는지 확인
+            expected_problem_numbers = set(p['problem'] for p in expected_problems)
+            actual_problem_numbers = set(s.get('problem_number_ocr') for s in sections if s.get('problem_number_ocr'))
+            
+            # OCR 실패로 인한 누락도 고려
+            missing_problems = []
+            for exp_prob in expected_problem_numbers:
+                found = False
+                for act_prob in actual_problem_numbers:
+                    if act_prob and str(exp_prob) == str(act_prob):
+                        found = True
+                        break
+                if not found:
+                    missing_problems.append(exp_prob)
+            
+            if missing_problems:
+                logger.error(f"   누락된 문제번호: {sorted(missing_problems)}")
+            
+            missing_cases.append({
+                'page_name': page_name,
+                'page_num': page_num_ocr,
+                'expected_count': expected_count,
+                'actual_count': actual_count,
+                'difference': expected_count - actual_count,
+                'expected_problems': sorted(expected_problem_numbers),
+                'actual_problems': sorted(actual_problem_numbers),
+                'missing_problems': sorted(missing_problems),
+                'sections': sections
+            })
+    
+    if not missing_cases:
+        logger.info("✅ 모든 페이지의 문제 수가 답지와 일치합니다!")
+        with open(analysis_path, "w", encoding="utf-8") as f:
+            f.write("=" * 80 + "\n")
+            f.write("답지 기반 누락 Section 분석\n")
+            f.write("=" * 80 + "\n\n")
+            f.write("✅ 모든 페이지의 문제 수가 답지와 일치합니다!\n")
+        return
+    
+    with open(analysis_path, "w", encoding="utf-8") as f:
+        f.write("=" * 80 + "\n")
+        f.write("답지 기반 누락 Section 분석\n")
+        f.write("=" * 80 + "\n\n")
+        f.write(f"총 {len(missing_cases)}개 페이지에서 불일치 발견\n\n")
+        
+        total_missing = sum(case['difference'] for case in missing_cases if case['difference'] > 0)
+        total_extra = sum(-case['difference'] for case in missing_cases if case['difference'] < 0)
+        
+        f.write(f"📊 전체 통계:\n")
+        f.write(f"  - 누락된 문제 (답지보다 적음): {total_missing}개\n")
+        f.write(f"  - 초과 검출 (답지보다 많음): {total_extra}개\n\n")
+        
+        for i, case in enumerate(missing_cases, 1):
+            f.write(f"\n{'='*80}\n")
+            f.write(f"[{i}] 페이지: {case['page_name']} (페이지번호: {case['page_num']})\n")
+            f.write(f"{'-'*80}\n")
+            
+            f.write(f"  📊 문제 수:\n")
+            f.write(f"     답지 예상: {case['expected_count']}개\n")
+            f.write(f"     실제 검출: {case['actual_count']}개\n")
+            f.write(f"     차이: {case['difference']:+d}개\n\n")
+            
+            if case['difference'] > 0:
+                f.write(f"  ❌ 누락된 문제:\n")
+                f.write(f"     답지 문제번호: {case['expected_problems']}\n")
+                f.write(f"     실제 인식된 문제번호: {case['actual_problems']}\n")
+                f.write(f"     누락된 문제번호: {case['missing_problems']}\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                
+                # Section crop 실패 확인
+                failed_crops = [s for s in case['sections'] if not s.get('crop_success', True)]
+                if failed_crops:
+                    f.write(f"     ❌ {len(failed_crops)}개 Section crop 실패\n")
+                    for s in failed_crops:
+                        f.write(f"        - Section {s.get('section_idx')}: {s.get('crop_failure_reason')}\n")
+                
+                # Section 자체가 검출 안 됨
+                if case['actual_count'] < case['expected_count']:
+                    not_detected = case['expected_count'] - case['actual_count']
+                    f.write(f"     ❌ {not_detected}개 Section이 검출되지 않음 (1004 모델 문제)\n")
+                    f.write(f"        → 해결방법:\n")
+                    f.write(f"           1. 1004 모델의 Section 검출 재학습\n")
+                    f.write(f"           2. Confidence threshold 조정 (현재 값 확인 필요)\n")
+                    f.write(f"           3. 이미지 품질 확인 (해상도, 선명도)\n")
+                
+                # 문제번호 OCR 실패
+                ocr_failures = [s for s in case['sections'] if not s.get('problem_number_ocr')]
+                if ocr_failures:
+                    f.write(f"     ⚠️ {len(ocr_failures)}개 문제번호 OCR 실패\n")
+                    f.write(f"        → 해결방법: OCR 모델 개선 또는 전처리 추가\n")
+            
+            elif case['difference'] < 0:
+                f.write(f"  ⚠️ 초과 검출 (답지보다 많음):\n")
+                f.write(f"     답지 문제번호: {case['expected_problems']}\n")
+                f.write(f"     실제 인식된 문제번호: {case['actual_problems']}\n\n")
+                
+                f.write(f"  🔍 원인 분석:\n")
+                f.write(f"     ⚠️ Section이 과다 검출됨 (1004 모델 문제)\n")
+                f.write(f"     → 해결방법:\n")
+                f.write(f"        1. NMS (Non-Maximum Suppression) threshold 조정\n")
+                f.write(f"        2. Confidence threshold 상향 조정\n")
+                f.write(f"        3. 중복 검출 필터링 로직 추가\n")
+    
+    logger.info(f"📊 답지 기반 누락 분석 저장 완료: {analysis_path}")
+    logger.info(f"   불일치 페이지: {len(missing_cases)}개")
+    logger.info(f"   누락된 문제: {total_missing}개")
+    logger.info(f"   초과 검출: {total_extra}개")
+
+
 def print_summary(all_results: list, skipped_pages: list, output_dir: Path, total_processing_time: float):
     """실험 결과 요약 출력"""
     logger.info("\n\n" + "=" * 60)
@@ -264,12 +692,14 @@ def print_summary(all_results: list, skipped_pages: list, output_dir: Path, tota
 
     total_pages = len(all_results)
     total_sections = sum(len(r.get("sections", [])) for r in all_results)
+    total_crop_failures = sum(r.get("crop_failure_count", 0) for r in all_results)
 
     logger.info(f"  처리된 페이지 수: {total_pages}")
     logger.info(f"  건너뛴 페이지 수: {len(skipped_pages)}")
     if skipped_pages:
         logger.info(f"    건너뛴 페이지: {', '.join(skipped_pages)}")
     logger.info(f"  총 Section 수: {total_sections}")
+    logger.info(f"  Section crop 실패: {total_crop_failures}개")
     logger.info(f"  전체 처리 시간: {total_processing_time:.2f}초 ({total_processing_time / 60:.2f}분)")
 
     if all_results:
@@ -278,6 +708,8 @@ def print_summary(all_results: list, skipped_pages: list, output_dir: Path, tota
 
     logger.info(f"\n📁 결과 TXT: {output_dir.parent.parent / 'answers' / 'results_summary.txt'}")
     logger.info(f"📊 None 디버깅: {output_dir.parent.parent / 'answers' / 'none_debug_analysis.txt'}")
+    logger.info(f"📊 Crop 실패 분석: {output_dir.parent.parent / 'answers' / 'crop_failure_analysis.txt'}")
+    logger.info(f"📊 답지 기반 누락 분석: {output_dir.parent.parent / 'answers' / 'missing_sections_analysis.txt'}")
     logger.info(f"📁 로그 파일: {log_file}")
     logger.info("=" * 60)
     logger.info("모든 실험이 완료되었습니다.")
