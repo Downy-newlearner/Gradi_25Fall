@@ -58,25 +58,19 @@ class _ContinuousLearningDetailPageState
   }
 
   Widget _buildHeader() {
-    final screenWidth = MediaQuery.of(context).size.width;
-
     return AppHeader(
-      title: Row(
-        children: [
-          CustomBackButton(),
-          SizedBox(width: screenWidth * 0.025),
-          const Text(
-            '연속학습',
-            style: TextStyle(
-              fontFamily: 'Pretendard',
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-              color: Color(0xFF585B69),
-            ),
-          ),
-        ],
+      leading: CustomBackButton(),
+      title: const Text(
+        '연속학습',
+        style: TextStyle(
+          fontFamily: 'Pretendard',
+          fontWeight: FontWeight.w700,
+          fontSize: 20,
+          color: Color(0xFF585B69),
+        ),
       ),
       trailing: const AppHeaderMenuButton(),
+      titleAlignment: 'left',
     );
   }
 

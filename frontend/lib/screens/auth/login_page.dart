@@ -29,11 +29,41 @@ class _LoginPageState extends State<LoginPage> {
   bool _isPasswordFieldError = false;
   bool _isLoading = false;
 
+  // 자동 로그인 및 아이디 저장 설정
+  bool _isAutoLoginEnabled = false;
+  bool _isSaveAccountIdEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  /// 저장된 설정 및 아이디 로드
+  Future<void> _loadSettings() async {
+    final authService = AuthService();
+
+    // 저장된 설정 로드
+    final autoLoginEnabled = await authService.isAutoLoginEnabled();
+    final saveAccountIdEnabled = await authService.isSaveAccountIdEnabled();
+
+    // 저장된 아이디 로드
+    final savedAccountId = await authService.getSavedAccountId();
+
+    setState(() {
+      _isAutoLoginEnabled = autoLoginEnabled;
+      _isSaveAccountIdEnabled = saveAccountIdEnabled;
+      if (savedAccountId != null && savedAccountId.isNotEmpty) {
+        _usernameController.text = savedAccountId;
+      }
+    });
   }
 
   void _clearErrors() {
@@ -124,12 +154,29 @@ class _LoginPageState extends State<LoginPage> {
 
             // AuthService를 사용하여 토큰 저장
             final authService = AuthService();
+
+            // 자동 로그인 설정 저장
+            await authService.setAutoLogin(_isAutoLoginEnabled);
+
+            // 아이디 저장 설정에 따라 처리
+            if (_isSaveAccountIdEnabled) {
+              await authService.setSaveAccountId(true);
+              await authService.saveAccountId(_usernameController.text.trim());
+            } else {
+              await authService.setSaveAccountId(false);
+              await authService.clearSavedAccountId();
+            }
+
+            // 로그인 성공 시 항상 토큰 저장 (현재 세션 유지)
+            // 자동 로그인 설정은 다음 앱 시작 시에만 영향
             await authService.saveAccessToken(accessToken);
             await authService.saveRefreshToken(refreshToken);
 
             developer.log('Login successful - tokens received and saved');
             developer.log('Access Token: ${accessToken.substring(0, 20)}...');
             developer.log('Refresh Token: ${refreshToken.substring(0, 20)}...');
+            developer.log('Auto login enabled: $_isAutoLoginEnabled');
+            developer.log('Save account ID enabled: $_isSaveAccountIdEnabled');
 
             // 사용자 정보 가져오기
             try {
@@ -277,8 +324,85 @@ class _LoginPageState extends State<LoginPage> {
                   ),
 
                   const SizedBox(
-                    height: 40,
-                  ), // Space between login button and links
+                    height: 20,
+                  ), // Space between login button and checkboxes
+                  // 자동 로그인 및 아이디 저장 체크박스
+                  Container(
+                    width: MediaQuery.of(context).size.width * 0.9,
+                    constraints: const BoxConstraints(
+                      maxWidth: 400,
+                      minWidth: 300,
+                    ),
+                    child: Column(
+                      children: [
+                        // 자동 로그인 체크박스
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _isAutoLoginEnabled,
+                              onChanged: (value) {
+                                setState(() {
+                                  _isAutoLoginEnabled = value ?? false;
+                                });
+                              },
+                              activeColor: const Color(0xFFAC5BF8),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _isAutoLoginEnabled = !_isAutoLoginEnabled;
+                                });
+                              },
+                              child: const Text(
+                                '자동 로그인',
+                                style: TextStyle(
+                                  fontFamily: 'Pretendard',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF333333),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        // 아이디 저장 체크박스
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: _isSaveAccountIdEnabled,
+                              onChanged: (value) {
+                                setState(() {
+                                  _isSaveAccountIdEnabled = value ?? false;
+                                });
+                              },
+                              activeColor: const Color(0xFFAC5BF8),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _isSaveAccountIdEnabled =
+                                      !_isSaveAccountIdEnabled;
+                                });
+                              },
+                              child: const Text(
+                                '아이디 저장',
+                                style: TextStyle(
+                                  fontFamily: 'Pretendard',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF333333),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(
+                    height: 20,
+                  ), // Space between checkboxes and links
                   // Links Section
                   LinksSection(
                     onSignUp: _handleSignUp,

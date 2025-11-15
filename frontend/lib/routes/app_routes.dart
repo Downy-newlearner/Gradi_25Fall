@@ -34,9 +34,11 @@ import '../screens/notification/notification_page.dart';
 import '../screens/upload/upload_images_page.dart';
 import '../screens/upload/edit_grading_result_page.dart';
 import '../screens/continuous_learning_detail_page.dart';
+import '../screens/loading_page.dart';
 
 class AppRoutes {
   static const String mainNavigation = '/';
+  static const String loading = '/loading';
   static const String login = '/login';
   static const String signup = '/signup';
   static const String signupTerms = '/signup-terms';
@@ -74,6 +76,7 @@ class AppRoutes {
 
   static Map<String, WidgetBuilder> get routes => {
     mainNavigation: (context) => const MainNavigationPage(),
+    loading: (context) => const LoadingPage(),
     login: (context) => const LoginPage(),
     signup: (context) => const SignUpPage(),
     signupTerms: (context) => const SignUpTermsPage(),

@@ -14,6 +14,7 @@ class ApiConfig {
   // 인증 관련
   static const String signInEndpoint = '/sign-in';
   static const String signUpEndpoint = '/sign-up';
+  static const String refreshTokenEndpoint = '/refresh-token';
 
   // 계정 관리
   static const String checkAccountIdEndpoint = '/users/check-accountId';
@@ -39,6 +40,7 @@ class ApiConfig {
   // 인증 관련
   static Uri getSignInUri() => Uri.parse('$baseUrl$signInEndpoint');
   static Uri getSignUpUri() => Uri.parse('$baseUrl$signUpEndpoint');
+  static Uri getRefreshTokenUri() => Uri.parse('$baseUrl$refreshTokenEndpoint');
 
   // 계정 관리
   static Uri getCheckAccountIdUri(String accountId) =>

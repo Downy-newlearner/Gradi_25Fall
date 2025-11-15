@@ -45,6 +45,12 @@ dependencies:
   # 로컬 알림
   flutter_local_notifications: ^18.0.1
 
+  # 위치 정보
+  geolocator: ^13.0.1
+
+  # 로컬 저장소
+  shared_preferences: ^2.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

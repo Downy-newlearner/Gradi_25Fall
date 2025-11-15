@@ -85,19 +85,20 @@ class UserService {
   }
 
   /// 서버에서 사용자 정보 가져오기 (API 호출)
+  /// 토큰 만료 시 자동으로 갱신 시도
   Future<User?> fetchUserFromServer() async {
     try {
-      // JWT 토큰 가져오기
-      final token = await AuthService().getAccessToken();
+      // 유효한 Access Token 확인 및 필요시 갱신
+      final token = await AuthService().ensureValidAccessToken();
       if (token == null) {
-        developer.log('❌ No access token found');
+        developer.log('❌ No valid access token available');
         return null;
       }
 
       developer.log('🌐 Fetching user info from server...');
 
       // API 호출
-      final response = await http
+      var response = await http
           .get(
             ApiConfig.getMeUri(),
             headers: {
@@ -106,6 +107,35 @@ class UserService {
             },
           )
           .timeout(const Duration(seconds: 10));
+
+      // 401 에러 발생 시 토큰 갱신 후 재시도
+      if (response.statusCode == 401) {
+        developer.log('⚠️ Unauthorized (401): Attempting token refresh...');
+
+        final refreshed = await AuthService().refreshAccessToken();
+        if (refreshed) {
+          // 갱신된 토큰으로 재시도
+          final newToken = await AuthService().getAccessToken();
+          if (newToken != null) {
+            developer.log('🔄 Retrying request with refreshed token...');
+            response = await http
+                .get(
+                  ApiConfig.getMeUri(),
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer $newToken',
+                  },
+                )
+                .timeout(const Duration(seconds: 10));
+          } else {
+            developer.log('❌ Failed to get refreshed token');
+            return null;
+          }
+        } else {
+          developer.log('❌ Token refresh failed - 로그인 필요');
+          return null;
+        }
+      }
 
       if (response.statusCode == 200) {
         final responseData = json.decode(utf8.decode(response.bodyBytes));
@@ -117,11 +147,6 @@ class UserService {
         developer.log('✅ User fetched from server: ${_cachedUser?.name}');
         _notifyListeners();
         return _cachedUser;
-      } else if (response.statusCode == 401) {
-        // 인증 오류 - 토큰 만료 가능성
-        developer.log('❌ Unauthorized (401): Token may be expired');
-        // TODO: 토큰 갱신 로직 추가
-        return null;
       } else {
         developer.log('❌ Failed to fetch user: ${response.statusCode}');
         developer.log('   Response: ${response.body}');

@@ -338,7 +338,7 @@ class _HomePageV2State extends State<HomePageV2> {
     );
   }
 
-  /// 누적 학습량 섹션
+  /// 오늘의 학습 섹션
   Widget _buildAccumulatedLearningSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -347,7 +347,7 @@ class _HomePageV2State extends State<HomePageV2> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             const Text(
-              '누적 학습량',
+              '오늘의 학습',
               style: TextStyle(
                 fontFamily: 'Pretendard',
                 fontWeight: FontWeight.w700,
