@@ -387,8 +387,8 @@ if __name__ == "__main__":
     import os
 
     # 경로 설정
-    base_dir = "./DB/output/database4"  # 페이지 디렉토리들이 있는 최상위 디렉토리
-    output_json_path = "./DB/database4.json"
+    base_dir = "./DB/output/database2"  # 페이지 디렉토리들이 있는 최상위 디렉토리
+    output_json_path = "./DB/database2.json"
 
     # 파이프라인 실행
     pipeline = LLMDBPipelineFromImages(output_json_path)

@@ -268,7 +268,7 @@ if __name__ == "__main__":
     import os
 
     model_dir = "./models/Detection/Model_routing_1004"
-    images_dir = "./DB/images/database1"
+    images_dir = "./DB/images/database1z"
     output_dir = "./DB/output/database1"
 
     pipeline = LLMDBPipeline(model_dir)

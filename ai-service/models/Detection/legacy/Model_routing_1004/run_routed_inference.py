@@ -107,7 +107,7 @@ class RoutedInference:
         self.large_conf = 0.12
         
         # Post-processing 파라미터
-        self.roi_height = 60  # 첫 번째 확장은 40px(roi_height/2), 이후는 10px씩
+        self.roi_height = 60  # 첫 번째 확장은 60px, 이후는 5px씩
         
         print(f"✅ Small model loaded: {self.small_model_path}")
         print(f"✅ Large model loaded: {self.large_model_path}")
@@ -148,8 +148,9 @@ class RoutedInference:
         """
         Section에 대해 post-processing 적용
         - section이 없으면 problem_number 기반으로 생성
+        - section 확장 시 다른 problem_number를 침범하지 않도록 제한
         """
-        # problem_number의 왼쪽 위 좌표 수집
+        # problem_number의 왼쪽 위 좌표 수집 및 Y 좌표 기준 정렬
         question_numbers = []
         for det in detections:
             if det['class_name'] == 'problem_number':
@@ -157,6 +158,9 @@ class RoutedInference:
                     'bbox': det['bbox'],
                     'confidence': det['confidence']
                 })
+        
+        # Y 좌표 기준으로 정렬 (위에서 아래로)
+        question_numbers.sort(key=lambda x: x['bbox'][1])
         
         # section 검출 결과
         section_detections = [det for det in detections if det['class_name'] == 'section']
@@ -176,10 +180,16 @@ class RoutedInference:
                 section_x1 = max(0, qn_x1 - 10)
                 section_y1 = max(0, qn_y1 - 10)
 
-                # 2. 오른쪽으로 30px, 아래쪽으로 30px 확장
+                # 2. 오른쪽으로 600px, 아래쪽으로 900px 확장
                 h, w = image.shape[:2]
                 section_x2 = min(w, section_x1 + 600)
                 section_y2 = min(h, section_y1 + 900)
+                
+                # 다음 problem_number의 상단 Y 좌표 찾기
+                next_pn_y = h  # 기본값: 이미지 하단
+                if idx + 1 < len(question_numbers):
+                    next_pn_y = question_numbers[idx + 1]['bbox'][1]
+                    print(f"       📍 다음 problem_number 위치: y={next_pn_y:.1f}")
                 
                 # 3. ROI 기반 오른쪽 확장 (5px씩)
                 right_expansion_count = 0
@@ -197,11 +207,16 @@ class RoutedInference:
                     else:
                         break
                 
-                # 4. ROI 기반 아래쪽 확장 (5px씩)
+                # 4. ROI 기반 아래쪽 확장 (5px씩) - 다음 problem_number 고려
                 bottom_expansion_count = 0
                 
                 while bottom_expansion_count < max_expansions:
                     if section_y2 + 5 > h:
+                        break
+                    
+                    # 다음 problem_number의 상단을 침범하지 않도록 확인
+                    if section_y2 + 5 > next_pn_y:
+                        print(f"       ⛔ 다음 problem_number 영역 도달 (y={next_pn_y:.1f})")
                         break
                     
                     bottom_roi = [section_x1, section_y2, section_x2, section_y2 + 5]
@@ -251,6 +266,22 @@ class RoutedInference:
             
             print(f"  🔧 Section 처리 시작: bbox=({x_min:.1f}, {y_min:.1f}, {x_max:.1f}, {y_max:.1f})")
             
+            # 현재 section과 연관된 problem_number 찾기
+            current_pn_idx = -1
+            next_pn_y = image.shape[0]  # 기본값: 이미지 하단
+            
+            for idx, qn in enumerate(question_numbers):
+                qn_y = qn['bbox'][1]
+                # section 영역 내에 있는 problem_number 찾기
+                if y_min <= qn_y <= y_max:
+                    current_pn_idx = idx
+                    break
+            
+            # 다음 problem_number의 Y 좌표 찾기
+            if current_pn_idx != -1 and current_pn_idx + 1 < len(question_numbers):
+                next_pn_y = question_numbers[current_pn_idx + 1]['bbox'][1]
+                print(f"    📍 다음 problem_number 위치: y={next_pn_y:.1f}")
+            
             # 1. 가장 가까운 problem_number에 왼쪽 위 맞추기
             if question_numbers:
                 min_dist = float('inf')
@@ -267,19 +298,21 @@ class RoutedInference:
                     y_min = nearest_qn[1]
                     print(f"    ↔️ problem_number 정렬: ({nearest_qn[0]:.1f}, {nearest_qn[1]:.1f})")
             
-            # 2. 위쪽 확장 (첫 번째: 40px, 이후: 10px씩)
-            print(f"    ⬆️ 위쪽 확장 시작 (첫 번째: 40px, 이후: 10px씩)")
+            # 2. 위쪽 확장 (첫 번째: 60px, 이후: 5px씩)
+            print(f"    ⬆️ 위쪽 확장 시작 (첫 번째: {self.roi_height}px, 이후: 5px씩)")
             expansion_count = 0
+            stopped_by_boundary_top = False  # 경계로 인해 중단되었는지 추적
             
             while True:
-                # 첫 번째 확장은 40px (roi_height/2), 이후는 10px씩
+                # 첫 번째 확장은 roi_height, 이후는 5px씩
                 if expansion_count == 0:
                     expansion_size = self.roi_height
                 else:
-                    expansion_size = 10
+                    expansion_size = 5
                 
                 if y_min - expansion_size < 0:
                     print(f"      ⛔ 이미지 상단 경계 도달 ({expansion_count}번 확장 후)")
+                    stopped_by_boundary_top = True
                     break
                 
                 top_upside_roi = [x_min, y_min - expansion_size, x_max, y_min]
@@ -288,26 +321,37 @@ class RoutedInference:
                     y_min -= expansion_size
                     expansion_count += 1
                     if expansion_count == 1:
-                        print(f"      ⬆️ 위로 확장 (1차: 40px): y_min={y_min:.1f}")
+                        print(f"      ⬆️ 위로 확장 (1차: {self.roi_height}px): y_min={y_min:.1f}")
                     else:
-                        print(f"      ⬆️ 위로 확장 ({expansion_count}차: 10px): y_min={y_min:.1f}")
+                        print(f"      ⬆️ 위로 확장 ({expansion_count}차: 5px): y_min={y_min:.1f}")
                 else:
                     print(f"      ⏹️ 공백 영역 도달 ({expansion_count}번 확장 후)")
                     break
             
-            # 3. 아래쪽 확장 (첫 번째: 40px, 이후: 10px씩)
-            print(f"    ⬇️ 아래쪽 확장 시작 (첫 번째: 40px, 이후: 10px씩)")
+            # 위쪽이 경계로 중단되지 않았고, 첫 확장이 안 된 경우 padding 미적용
+            if expansion_count == 0:
+                print(f"      ⚠️ 위쪽 확장 없음 → padding 미적용")
+            
+            # 3. 아래쪽 확장 (첫 번째: 60px, 이후: 5px씩) - 다음 problem_number 고려
+            print(f"    ⬇️ 아래쪽 확장 시작 (첫 번째: {self.roi_height}px, 이후: 5px씩)")
             expansion_count = 0
+            stopped_by_pn_bottom = False  # problem_number로 인해 중단되었는지 추적
             
             while True:
-                # 첫 번째 확장은 40px (roi_height/2), 이후는 10px씩
+                # 첫 번째 확장은 roi_height, 이후는 5px씩
                 if expansion_count == 0:
                     expansion_size = self.roi_height
                 else:
-                    expansion_size = 10
+                    expansion_size = 5
                 
                 if y_max + expansion_size > image.shape[0]:
                     print(f"      ⛔ 이미지 하단 경계 도달 ({expansion_count}번 확장 후)")
+                    break
+                
+                # 다음 problem_number의 상단을 침범하지 않도록 확인
+                if y_max + expansion_size > next_pn_y:
+                    print(f"      ⛔ 다음 problem_number 영역 도달 (y={next_pn_y:.1f}, {expansion_count}번 확장 후)")
+                    stopped_by_pn_bottom = True
                     break
                 
                 bottom_downside_roi = [x_min, y_max, x_max, y_max + expansion_size]
@@ -316,12 +360,16 @@ class RoutedInference:
                     y_max += expansion_size
                     expansion_count += 1
                     if expansion_count == 1:
-                        print(f"      ⬇️ 아래로 확장 (1차: 40px): y_max={y_max:.1f}")
+                        print(f"      ⬇️ 아래로 확장 (1차: {self.roi_height}px): y_max={y_max:.1f}")
                     else:
-                        print(f"      ⬇️ 아래로 확장 ({expansion_count}차: 10px): y_max={y_max:.1f}")
+                        print(f"      ⬇️ 아래로 확장 ({expansion_count}차: 5px): y_max={y_max:.1f}")
                 else:
                     print(f"      ⏹️ 공백 영역 도달 ({expansion_count}번 확장 후)")
                     break
+            
+            # 아래쪽이 problem_number로 중단된 경우 padding 미적용
+            if stopped_by_pn_bottom:
+                print(f"      ⚠️ 아래쪽이 problem_number로 중단됨 → padding 미적용")
             
             # 교정된 section 저장
             section['bbox'] = [x_min, y_min, x_max, y_max]
