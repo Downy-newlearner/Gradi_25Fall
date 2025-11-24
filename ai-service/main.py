@@ -295,6 +295,7 @@ async def send_answer_explanation(
     chapter_id: int,
     page: int,
     question_number: int,
+    user_answer: int,
     explanation: str,
     is_correct: bool,
     sub_question_number: int = 0,
@@ -309,6 +310,7 @@ async def send_answer_explanation(
         page=page,
         question_number=question_number,
         sub_question_number=sub_question_number,
+        user_answer=user_answer,
         explanation=explanation,
         is_correct=is_correct,
         score=score
@@ -318,7 +320,7 @@ async def send_answer_explanation(
         TOPIC_ANSWER_EXPLANATION,
         value=message.model_dump_json().encode('utf-8')
     )
-    logger.info(f"✅ 답안 해설 메시지 전송: page={page}, question={question_number}, chapter_id={chapter_id}, is_correct={is_correct}")
+    logger.info(f"✅ 답안 해설 메시지 전송: page={page}, question={question_number}, user_answer={user_answer}, is_correct={is_correct}")
 
 
 # ============================================================
@@ -484,9 +486,9 @@ async def process_grading_request(request: DownloadUrlRequest):
                             explanation_tasks.append({
                                 'page': page_int,
                                 'problem': problem_int,
-                                'answer': answer_int,
+                                'user_answer': answer_int,
                                 'is_correct': is_correct,
-                                'chapter_id': chapter_id  # chapter_id 추가
+                                'chapter_id': chapter_id
                             })
                         except ValueError:
                             logger.warning(f"해설 생성 스킵: 숫자 변환 실패 (page={page_number}, problem={problem_number}, answer={answer})")
@@ -513,17 +515,18 @@ async def process_grading_request(request: DownloadUrlRequest):
                         explanation = await generate_explanation_async(
                             page_number=task['page'],
                             problem_number=task['problem'],
-                            user_answer=task['answer']
+                            user_answer=task['user_answer']
                         )
                         
                         if explanation:
-                            # 해설 메시지 전송 (chapter_id 포함)
+                            # 해설 메시지 전송 (user_answer 포함)
                             await send_answer_explanation(
                                 request=request,
                                 book_id=book_id,
                                 chapter_id=task['chapter_id'],
                                 page=task['page'],
                                 question_number=task['problem'],
+                                user_answer=task['user_answer'],
                                 explanation=explanation,
                                 is_correct=task['is_correct'],
                                 sub_question_number=0,

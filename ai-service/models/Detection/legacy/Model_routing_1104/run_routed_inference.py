@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# Model_routing_1104/run_routed_inference.py
 """
 라우팅 추론 스크립트
 YOLOv8n (큰 객체)과 YOLOv8s (작은 객체) 모델을 결합하여 추론을 수행합니다.

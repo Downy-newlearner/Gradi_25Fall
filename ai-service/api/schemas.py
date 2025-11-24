@@ -58,6 +58,9 @@ class AnswerExplanationRequest(BaseModel):
     """ 답안 해설 요청 메시지 """
     student_response_id: int
     academy_user_id: int
+    page: int
+    question_number: int
+    user_answer: int
 
 class AnswerExplanationMessage(BaseModel):
     """ 답안 해설 메시지 """
@@ -68,6 +71,7 @@ class AnswerExplanationMessage(BaseModel):
     page: int
     question_number: int
     sub_question_number: int
+    user_answer: int 
     explanation: str
     is_correct: bool
     score: int = 1

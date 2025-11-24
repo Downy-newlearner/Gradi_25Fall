@@ -398,6 +398,7 @@ curl http://localhost:8000/health
   "page": 102,
   "question_number": 41,
   "sub_question_number": 0,
+  "user_answer": 2,
   "explanation": "🔎 문제 41 (p.102)\n\n✅ 정답: 4\n✏️ 사용자의 선택: 2\n\n💡 상세 해설\n이 문제는 글의 흐름을 파악하는 문제입니다...\n\n🔹 해설 요약\n글의 주제를 정확히 파악하면 정답을 찾을 수 있습니다.",
   "is_correct": false,
   "score": 0
@@ -413,6 +414,7 @@ curl http://localhost:8000/health
 | page | int | 페이지 번호 |
 | question_number | int | 문제 번호 |
 | sub_question_number | int | 소문제 번호 (기본값: 0) |
+| user_answer | int | 학생이 선택한 답안 (1-5) |
 | explanation | string | LLM 생성 해설 |
 | is_correct | boolean | 정답 여부 |
 | score | int | 점수 (정답: 1, 오답: 0) |
@@ -524,7 +526,28 @@ public class GradingResultConsumer {
     @KafkaListener(topics = "answer-explanation")
     public void handleExplanation(String message) {
         // 해설 저장
+        // message에서 user_answer 필드로 학생이 선택한 답안 확인 가능
     }
+}
+```
+
+### DTO 클래스 예시
+
+```java
+// 해설 메시지 DTO
+@Data
+public class AnswerExplanationMessage {
+    private int studentResponseId;
+    private int academyUserId;
+    private int bookId;
+    private int chapterId;
+    private int page;
+    private int questionNumber;
+    private int subQuestionNumber;
+    private int userAnswer;        // 학생이 선택한 답안
+    private String explanation;
+    private boolean isCorrect;
+    private int score;
 }
 ```
 
