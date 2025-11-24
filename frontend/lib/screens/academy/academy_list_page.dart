@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../../widgets/back_button.dart';
 import '../../services/location_service.dart';
 import '../../services/academy_service.dart';
@@ -41,6 +42,9 @@ class _AcademyListPageState extends State<AcademyListPage> {
     });
 
     try {
+      // 개발 환경에서 SSL 인증서 검증 우회 (프로덕션에서는 제거)
+      HttpOverrides.global = MyHttpOverrides();
+
       // 현재 위치 가져오기
       final position = await _locationService.getCurrentLocation();
 
@@ -65,7 +69,7 @@ class _AcademyListPageState extends State<AcademyListPage> {
           distance: '${academy.distanceKm.toStringAsFixed(1)}km',
           address: academy.academyRoadAddress,
           thumbnail: 'assets/images/academy1.jpg', // 기본 썸네일
-          academyId: academy.academyId,
+          academyCode: academy.academyCode,
         );
       }).toList();
 
@@ -444,13 +448,23 @@ class AcademyData {
   final String distance;
   final String address;
   final String thumbnail;
-  final int? academyId; // 학원 ID
+  final String? academyCode; // 학원 코드
 
   AcademyData({
     required this.name,
     required this.distance,
     required this.address,
     required this.thumbnail,
-    this.academyId,
+    this.academyCode,
   });
+}
+
+// 개발 환경에서 SSL 인증서 검증 우회를 위한 클래스 (프로덕션에서는 제거)
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
+  }
 }

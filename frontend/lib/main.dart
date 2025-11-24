@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:io';
 import 'firebase_options.dart';
 import 'services/fcm_service.dart';
 import 'routes/app_routes.dart';
@@ -9,6 +10,12 @@ import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 🔥 개발 환경에서만 SSL 인증서 검증 우회
+  // 프로덕션에서는 제거하거나 kDebugMode로 감싸기
+  if (kDebugMode) {
+    HttpOverrides.global = MyHttpOverrides();
+  }
 
   // Firebase 초기화 (이미 초기화되어 있으면 스킵)
   try {
@@ -117,5 +124,16 @@ class _UnknownRoutePage extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// 개발 환경에서 SSL 인증서 검증 우회를 위한 클래스
+// 프로덕션에서는 제거하거나 kDebugMode로 감싸기
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
   }
 }

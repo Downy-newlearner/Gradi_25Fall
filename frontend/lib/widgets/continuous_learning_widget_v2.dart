@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/assessment.dart';
 
 /// 연속학습 위젯 V2 - 개선된 UI/UX
 ///
@@ -12,6 +13,7 @@ class ContinuousLearningWidgetV2 extends StatefulWidget {
   final int consecutiveDays;
   final Set<String> completedDates;
   final Set<String> homeworkDeadlines;
+  final Map<String, List<Assessment>>? dateAssessments; // Assessment 데이터
   final Function(DateTime)? onDateSelected;
 
   const ContinuousLearningWidgetV2({
@@ -19,6 +21,7 @@ class ContinuousLearningWidgetV2 extends StatefulWidget {
     required this.consecutiveDays,
     this.completedDates = const {},
     this.homeworkDeadlines = const {},
+    this.dateAssessments,
     this.onDateSelected,
   });
 
@@ -352,14 +355,33 @@ class _ContinuousLearningWidgetV2State
   }
 
   bool _isDateCompleted(DateTime date) {
-    final dateStr =
-        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final dateStr = _formatDate(date);
+
+    // Assessment 데이터가 있으면 그것을 우선 사용
+    if (widget.dateAssessments != null) {
+      final assessments = widget.dateAssessments![dateStr] ?? [];
+      return assessments.any((a) => a.assessStatus == 'Y');
+    }
+
+    // 없으면 기존 completedDates 사용 (하위 호환성)
     return widget.completedDates.contains(dateStr);
   }
 
   bool _hasHomeworkDeadline(DateTime date) {
-    final dateStr =
-        '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final dateStr = _formatDate(date);
+
+    // Assessment 데이터가 있으면 그것을 우선 사용
+    if (widget.dateAssessments != null) {
+      final assessments = widget.dateAssessments![dateStr] ?? [];
+      return assessments.isNotEmpty;
+    }
+
+    // 없으면 기존 homeworkDeadlines 사용 (하위 호환성)
     return widget.homeworkDeadlines.contains(dateStr);
+  }
+
+  /// 날짜 포맷팅 (YYYY-MM-DD)
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
   }
 }

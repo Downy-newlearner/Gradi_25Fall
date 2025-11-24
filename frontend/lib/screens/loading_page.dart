@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
+import '../services/assessment_service.dart';
+import '../services/academy_service.dart';
 import 'dart:developer' as developer;
 
 /// 앱 시작 시 로딩 페이지
@@ -106,6 +108,63 @@ class _LoadingPageState extends State<LoadingPage> {
         // 초기화 실패해도 메인 페이지로 이동 (캐시된 데이터 사용)
       }
 
+      // 학원 목록 API 호출 및 디폴트 학원 선택
+      try {
+        final userId = await authService.getUserId();
+        if (userId != null) {
+          developer.log('🔄 학원 목록 조회 중...');
+          final academyService = AcademyService();
+          final academies = await academyService.getUserAcademies(userId);
+
+          // SharedPreferences에 학원 목록 저장
+          await academyService.saveAcademiesToCache(academies);
+          developer.log('✅ 학원 목록 캐시 저장 완료 (${academies.length}개)');
+
+          // 디폴트 학원 선택 및 저장
+          final defaultAcademyCode = await academyService
+              .selectDefaultAcademyAsync(academies);
+          if (defaultAcademyCode != null) {
+            await academyService.saveDefaultAcademyCode(defaultAcademyCode);
+            developer.log('✅ 디폴트 학원 선택 및 저장 완료 (Code: $defaultAcademyCode)');
+
+            // 현재 달과 다음 달의 Assessment 데이터 로드 (디폴트 학원 사용)
+            try {
+              final now = DateTime.now();
+
+              // 현재 달의 첫 번째 날 (UTC)
+              final currentMonthStart = DateTime.utc(now.year, now.month, 1);
+
+              // 다음 달 계산 (set 함수 사용)
+              final nextMonthStart = _getNextMonth(currentMonthStart);
+
+              // 현재 달과 다음 달 데이터를 병렬로 가져오기
+              await Future.wait([
+                AssessmentService().getAssessmentsForMonth(
+                  dateTime: currentMonthStart,
+                  userAcademyId: defaultAcademyCode,
+                ),
+                AssessmentService().getAssessmentsForMonth(
+                  dateTime: nextMonthStart,
+                  userAcademyId: defaultAcademyCode,
+                ),
+              ]);
+
+              developer.log('✅ 현재 달과 다음 달 Assessment 데이터 로드 완료');
+            } catch (e) {
+              developer.log('⚠️ Assessment 데이터 로드 실패: $e');
+              // 실패해도 앱은 계속 진행
+            }
+          } else {
+            developer.log('⚠️ 디폴트 학원을 선택할 수 없음 (등록완료된 학원이 없음)');
+          }
+        } else {
+          developer.log('⚠️ 사용자 ID를 가져올 수 없어 학원 목록 조회를 건너뜀');
+        }
+      } catch (e) {
+        developer.log('⚠️ 학원 목록 조회 실패: $e');
+        // 실패해도 앱은 계속 진행 (캐시된 데이터 사용 가능)
+      }
+
       // 메인 네비게이션 페이지로 이동
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
@@ -116,6 +175,15 @@ class _LoadingPageState extends State<LoadingPage> {
       if (mounted) {
         Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
       }
+    }
+  }
+
+  /// 다음 달 계산 헬퍼 함수
+  DateTime _getNextMonth(DateTime dateTime) {
+    if (dateTime.month == 12) {
+      return DateTime.utc(dateTime.year + 1, 1, 1);
+    } else {
+      return DateTime.utc(dateTime.year, dateTime.month + 1, 1);
     }
   }
 

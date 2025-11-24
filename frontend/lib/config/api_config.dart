@@ -32,6 +32,13 @@ class ApiConfig {
   static const String verifyResetPasswordEndpoint = '/verify/reset_password';
   static const String verifyFindAccountEndpoint = '/verify/find_account';
 
+  // Assessment 관련
+  static const String assessmentsAssigneeEndpoint =
+      '/grading/assessments/assignee';
+
+  // Academy 관련
+  static const String academyClassesEndpoint = '/academy/academy-users/classes';
+
   // ========== URI 생성 헬퍼 메서드 ==========
 
   // 사용자 정보
@@ -64,4 +71,45 @@ class ApiConfig {
       Uri.parse('$baseUrl$verifyResetPasswordEndpoint');
   static Uri getVerifyFindAccountUri() =>
       Uri.parse('$baseUrl$verifyFindAccountEndpoint');
+
+  // Assessment 관련
+  static Uri getAssessmentsAssigneeUri(
+    String userAcademyId, {
+    DateTime? dateTime, // ISO 8601 형식으로 변환할 DateTime
+    String? iso8601String, // 직접 ISO 8601 문자열 전달 (선택사항)
+  }) {
+    // 새로운 방식: DateTime을 ISO 8601 형식으로 변환
+    if (dateTime != null) {
+      // ISO 8601 형식으로 변환 (UTC 기준)
+      // 해당 월의 첫 번째 날, 00:00:00 UTC로 설정
+      final monthStart = DateTime.utc(dateTime.year, dateTime.month, 1);
+
+      // "2025-11-01T00:00:00.000Z" -> "2025-11-01T00:00:00" (밀리초와 Z 제거)
+      final iso8601Str = monthStart.toIso8601String().split('.').first;
+
+      // URL 경로에 사용하므로 특수 문자 인코딩 필요
+      final encodedIso8601 = Uri.encodeComponent(iso8601Str);
+
+      return Uri.parse(
+        '$baseUrl$assessmentsAssigneeEndpoint/$userAcademyId/$encodedIso8601',
+      );
+    }
+
+    // 직접 ISO 8601 문자열 전달
+    if (iso8601String != null) {
+      final encodedIso8601 = Uri.encodeComponent(iso8601String);
+      return Uri.parse(
+        '$baseUrl$assessmentsAssigneeEndpoint/$userAcademyId/$encodedIso8601',
+      );
+    }
+
+    // dateTime과 iso8601String이 모두 null이면 예외 발생
+    throw ArgumentError('dateTime 또는 iso8601String 중 하나는 필수입니다.');
+  }
+
+  // Academy 관련
+  static Uri getAcademyClassesUri(List<String> assigneeIds) {
+    final idsParam = assigneeIds.join(',');
+    return Uri.parse('$baseUrl$academyClassesEndpoint?ids=$idsParam');
+  }
 }

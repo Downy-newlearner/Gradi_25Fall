@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/bottom_navigation_widget.dart';
-import 'home_page_v2.dart';
+import 'home_page.dart';
 import 'workbook/workbook_page.dart';
 import 'academy/academy_page.dart';
 import 'mypage/mypage.dart';
@@ -17,12 +17,17 @@ class MainNavigationPage extends StatefulWidget {
 class _MainNavigationPageState extends State<MainNavigationPage> {
   int _currentIndex = 0;
 
+  // HomePage의 State에 접근하기 위한 GlobalKey
+  final GlobalKey<State<HomePage>> _homePageKey = GlobalKey();
+  // AcademyPage의 State에 접근하기 위한 GlobalKey
+  final GlobalKey<State<AcademyPage>> _academyPageKey = GlobalKey();
+
   // 모든 탭 페이지들
-  final List<Widget> _pages = [
-    const HomePageV2(), // V2로 변경
+  late final List<Widget> _pages = [
+    HomePage(key: _homePageKey), // GlobalKey 전달
     const WorkbookPage(),
     const UploadImagesPage(),
-    const AcademyPage(),
+    AcademyPage(key: _academyPageKey), // GlobalKey 전달
     const MyPage(),
     const NotificationPage(),
   ];
@@ -37,6 +42,32 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
           setState(() {
             _currentIndex = index;
           });
+
+          // 홈 탭(인덱스 0)으로 전환 시 새로고침
+          if (index == 0) {
+            final homeState = _homePageKey.currentState;
+            // dynamic으로 캐스팅하여 refresh() 메서드 호출
+            if (homeState != null) {
+              try {
+                (homeState as dynamic).refresh();
+              } catch (e) {
+                // refresh() 메서드가 없는 경우 무시
+              }
+            }
+          }
+
+          // 학원 탭(인덱스 3)으로 전환 시 새로고침
+          if (index == 3) {
+            final academyState = _academyPageKey.currentState;
+            // dynamic으로 캐스팅하여 refresh() 메서드 호출
+            if (academyState != null) {
+              try {
+                (academyState as dynamic).refresh();
+              } catch (e) {
+                // refresh() 메서드가 없는 경우 무시
+              }
+            }
+          }
         },
       ),
     );

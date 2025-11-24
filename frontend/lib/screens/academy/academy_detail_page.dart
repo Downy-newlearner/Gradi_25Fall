@@ -99,15 +99,16 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
                     color: Color(0xFF333333),
                   ),
                 ),
-                TextSpan(
-                  text: ' #DF850',
-                  style: TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 18,
-                    color: Colors.grey[400],
+                if (widget.academy.academyCode != null)
+                  TextSpan(
+                    text: ' #${widget.academy.academyCode}',
+                    style: TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                      color: Colors.grey[400],
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -360,8 +361,8 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
   }
 
   Future<void> _handleRegister() async {
-    // academyId가 없는 경우 처리
-    if (widget.academy.academyId == null) {
+    // academyCode가 없는 경우 처리
+    if (widget.academy.academyCode == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('학원 정보가 올바르지 않습니다.'),
@@ -383,14 +384,9 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
       }
 
       // 학원 등록 요청
-      // [2025.11.12]
-      // - class_id: 어떤 반인지 (반 정보) - 현재는 0으로 설정 (추후 입력 필드 추가 예정)
-      // - learner_id: 학번 (학원에서 학번을 제공하는 경우 사용할 예정) - 현재는 0으로 설정 (추후 입력 필드 추가 예정)
       await _academyService.joinAcademyRequest(
-        academyId: widget.academy.academyId!,
-        classId: 0, // TODO: 추후 반 선택 UI 추가 필요
-        userId: int.parse(userId),
-        learnerId: 0, // TODO: 추후 학번 입력 UI 추가 필요
+        academy_id: widget.academy.academyCode!,
+        user_id: int.parse(userId),
       );
 
       if (mounted) {
