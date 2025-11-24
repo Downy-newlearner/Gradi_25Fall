@@ -15,7 +15,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+client = OpenAI(
+    api_key=os.getenv('UPSTAGE_API_KEY'),
+    base_url="https://api.upstage.ai/v1"
+)
 
 # 시스템 프롬프트
 SYSTEM_PROMPT = """
@@ -240,7 +243,7 @@ def generate_explanation(user_input):
     # OpenAI API 호출
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="solar-mini",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt}
