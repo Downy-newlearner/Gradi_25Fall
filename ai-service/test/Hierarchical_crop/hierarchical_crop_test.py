@@ -35,8 +35,8 @@ def main():
     model_dir_1004 = current_dir.parent.parent / "models" / "Detection" / "legacy" / "Model_routing_1004"
     
     # ✨ answer_1과 answer_2용 ResNet 모델 경로 분리
-    resnet_answer_1_path = current_dir.parent.parent / "models" / "Classification" / "answer_1_resnet.pth"
-    resnet_answer_2_path = current_dir.parent.parent / "models" / "Classification" / "answer_2_resnet.pth"
+    resnet_answer_1_path = current_dir.parent.parent / "models" / "Recognition" / "models" / "answer_1_resnet.pth"
+    resnet_answer_2_path = current_dir.parent.parent / "models" / "Recognition" / "models" / "answer_2_resnet.pth"
 
     # 답지 파일 경로
     answer_key_path = current_dir / "answers" / "answer.txt"

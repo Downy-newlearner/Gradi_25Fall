@@ -1,0 +1,31 @@
+{
+  "image_path": "./test/Hierarchical_crop/images/exp_images/학생이 푼 문제(실전 모의고사) - 1.jpg",
+  "page_number": "88",
+  "sections": [
+    {
+      "problem_number": "04",
+      "answer": "3",
+      "correction": true
+    },
+    {
+      "problem_number": "01",
+      "answer": "4",
+      "correction": true
+    },
+    {
+      "problem_number": "02",
+      "answer": "2",
+      "correction": true
+    },
+    {
+      "problem_number": "05",
+      "answer": "3",
+      "correction": true
+    },
+    {
+      "problem_number": "03",
+      "answer": "3",
+      "correction": true
+    }
+  ]
+}
