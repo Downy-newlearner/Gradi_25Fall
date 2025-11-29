@@ -392,6 +392,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.2"
+  launchdarkly_event_source_client:
+    dependency: "direct main"
+    description:
+      name: launchdarkly_event_source_client
+      sha256: "51c90efe9765bf6908772abd59ea16c193798c1a9f9381475c56299cb553e3b2"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.1"
   leak_tracker:
     dependency: transitive
     description:

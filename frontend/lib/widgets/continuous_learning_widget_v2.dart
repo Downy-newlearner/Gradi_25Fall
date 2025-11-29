@@ -15,6 +15,7 @@ class ContinuousLearningWidgetV2 extends StatefulWidget {
   final Set<String> homeworkDeadlines;
   final Map<String, List<Assessment>>? dateAssessments; // Assessment 데이터
   final Function(DateTime)? onDateSelected;
+  final DateTime? selectedDate;
 
   const ContinuousLearningWidgetV2({
     super.key,
@@ -23,6 +24,7 @@ class ContinuousLearningWidgetV2 extends StatefulWidget {
     this.homeworkDeadlines = const {},
     this.dateAssessments,
     this.onDateSelected,
+    this.selectedDate,
   });
 
   @override
@@ -38,22 +40,40 @@ class _ContinuousLearningWidgetV2State
   @override
   void initState() {
     super.initState();
-    _selectedDate = DateTime.now();
+    _selectedDate = widget.selectedDate ?? DateTime.now();
 
     // 오늘 날짜가 오른쪽 끝에 오도록 스크롤 위치 설정
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final today = DateTime.now();
-      final todayIndex = today.day - 1; // 1일 = 인덱스 0
-      final itemWidth = MediaQuery.of(context).size.width / 8;
-
-      // 화면에 7개가 표시되므로, 오늘이 오른쪽 끝에 오려면 6칸 전부터 시작
-      final targetIndex = todayIndex - 6;
-
-      // 음수가 되지 않도록 보정
-      if (targetIndex > 0) {
-        _dateScrollController.jumpTo(itemWidth * targetIndex);
-      }
+      _scrollToDate(_selectedDate, jump: true);
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant ContinuousLearningWidgetV2 oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newSelected = widget.selectedDate ?? DateTime.now();
+    if (!_isSameDay(newSelected, _selectedDate)) {
+      setState(() {
+        _selectedDate = newSelected;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToDate(newSelected);
+      });
+    }
+  }
+  void _scrollToDate(DateTime date, {bool jump = false}) {
+    final itemWidth = MediaQuery.of(context).size.width / 8;
+    final targetIndex = date.day - 4; // 중앙 근처에 오도록 약간 여유
+    final offset = targetIndex <= 0 ? 0.0 : itemWidth * targetIndex;
+    if (jump) {
+      _dateScrollController.jumpTo(offset);
+    } else {
+      _dateScrollController.animateTo(
+        offset,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   @override

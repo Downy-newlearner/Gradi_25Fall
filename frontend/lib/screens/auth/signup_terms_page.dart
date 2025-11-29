@@ -302,58 +302,11 @@ class _SignUpTermsPageState extends State<SignUpTermsPage> {
         _isLoading = false;
       });
 
-      // 응답 처리
       if (response.statusCode == 200) {
-        // 응답이 단순 문자열인지 JSON인지 확인
-        final responseBody = response.body.trim();
-
-        // 단순 문자열 응답 처리
-        if (responseBody == 'Sign-up successful') {
-          // 성공: 회원가입 완료 페이지로 이동
-          if (mounted) {
-            Navigator.pushNamed(context, '/signup-success');
-          }
-          developer.log('Sign-up successful');
-        } else if (responseBody == 'User ID already exists!') {
-          // 중복된 아이디
-          if (mounted) {
-            _showErrorDialog(message: '이미 존재하는 아이디입니다.\n다른 아이디를 사용해주세요.');
-          }
-          developer.log('Sign-up failed: User ID already exists');
-        } else {
-          // JSON 응답 시도
-          try {
-            final responseData = json.decode(responseBody);
-            if (responseData['success'] == true ||
-                responseData['sign_up'] == 'successful') {
-              // 성공: 회원가입 완료 페이지로 이동
-              if (mounted) {
-                Navigator.pushNamed(context, '/signup-success');
-              }
-              developer.log('Sign-up successful');
-            } else {
-              // 실패: 에러 팝업 표시
-              final errorMessage =
-                  responseData['error'] ??
-                  responseData['message'] ??
-                  '회원가입에 실패했습니다.';
-              if (mounted) {
-                _showErrorDialog(message: errorMessage);
-              }
-              developer.log('Sign-up failed: $responseData');
-            }
-          } catch (e) {
-            // JSON 파싱 실패 - 서버 응답 그대로 표시
-            developer.log('Non-JSON response: $responseBody');
-            if (mounted) {
-              _showErrorDialog(
-                message: responseBody.isNotEmpty
-                    ? responseBody
-                    : '회원가입에 실패했습니다.',
-              );
-            }
-          }
+        if (mounted) {
+          Navigator.pushNamed(context, '/signup-success');
         }
+        developer.log('Sign-up successful (status 200)');
       } else {
         // 서버 오류
         if (mounted) {

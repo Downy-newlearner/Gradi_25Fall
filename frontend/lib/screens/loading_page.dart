@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
-import '../services/assessment_service.dart';
+import '../services/assessment_repository.dart';
 import '../services/academy_service.dart';
 import 'dart:developer' as developer;
 
@@ -32,6 +32,7 @@ class _LoadingPageState extends State<LoadingPage> {
   Future<void> _initializeApp() async {
     try {
       final authService = AuthService();
+      final assessmentRepository = AssessmentRepository();
 
       // 자동 로그인 설정 확인
       final isAutoLoginEnabled = await authService.isAutoLoginEnabled();
@@ -139,13 +140,13 @@ class _LoadingPageState extends State<LoadingPage> {
 
               // 현재 달과 다음 달 데이터를 병렬로 가져오기
               await Future.wait([
-                AssessmentService().getAssessmentsForMonth(
+                assessmentRepository.getForMonth(
+                  academyId: defaultAcademyCode,
                   dateTime: currentMonthStart,
-                  userAcademyId: defaultAcademyCode,
                 ),
-                AssessmentService().getAssessmentsForMonth(
+                assessmentRepository.getForMonth(
+                  academyId: defaultAcademyCode,
                   dateTime: nextMonthStart,
-                  userAcademyId: defaultAcademyCode,
                 ),
               ]);
 

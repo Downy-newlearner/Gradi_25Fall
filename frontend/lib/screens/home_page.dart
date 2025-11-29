@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import '../routes/app_routes.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_header_menu_button.dart';
 import '../widgets/continuous_learning_widget_v2.dart';
-import '../services/assessment_service.dart';
+import '../services/assessment_repository.dart';
 import '../services/academy_service.dart';
 import '../services/auth_service.dart';
 import '../models/assessment.dart';
+import '../utils/academy_utils.dart';
 import 'dart:developer' as developer;
 
 /// 홈 화면 - 개선된 UI/UX
@@ -31,7 +33,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final AssessmentService _assessmentService = AssessmentService();
+  final AssessmentRepository _assessmentRepository = AssessmentRepository();
   final AcademyService _academyService = AcademyService();
   final AuthService _authService = AuthService();
   final Map<String, List<Assessment>> _dateAssessments = {};
@@ -53,8 +55,17 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _academyService.defaultAcademyVersion.addListener(_onDefaultAcademyChanged);
     // 단일 진입점만 호출
     _initializeAcademyData(forceRefresh: false);
+  }
+
+  @override
+  void dispose() {
+    _academyService.defaultAcademyVersion.removeListener(
+      _onDefaultAcademyChanged,
+    );
+    super.dispose();
   }
 
   @override
@@ -68,6 +79,24 @@ class _HomePageState extends State<HomePage> {
   /// 탭 전환 시 MainNavigationPage에서 호출
   void refresh() {
     developer.log('🔄 [HomePage] refresh() called from external');
+    _initializeAcademyData(forceRefresh: true);
+  }
+
+  /// 외부에서 특정 날짜를 열도록 요청할 때 사용
+  void focusOnDate(DateTime date) {
+    developer.log('🎯 [HomePage] focusOnDate 요청: $date');
+    final normalized = DateTime(date.year, date.month, date.day);
+    setState(() {
+      _selectedDate = normalized;
+    });
+    _loadDateData(normalized);
+  }
+
+  void _onDefaultAcademyChanged() {
+    if (!mounted) return;
+    developer.log('🔁 [HomePage] 디폴트 학원 변경 감지, 데이터 재초기화');
+    _dateAssessments.clear();
+    _homeworkStatus.clear();
     _initializeAcademyData(forceRefresh: true);
   }
 
@@ -276,7 +305,10 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      final userAcademyId = await _getUserAcademyId();
+      final userAcademyId = await getUserAcademyId(
+        academyService: _academyService,
+        registeredAcademies: _registeredAcademies,
+      );
 
       // 학원 ID가 없으면 건너뛰기
       if (userAcademyId == null) {
@@ -293,18 +325,18 @@ class _HomePageState extends State<HomePage> {
       final nextMonthStart = _getNextMonth(currentMonthStart);
 
       // 캐시 초기화 (메모리 캐시와 SharedPreferences)
-      await _assessmentService.clearAllAssessmentCache();
+      await _assessmentRepository.clearAll();
       developer.log('🔄 [HomePage] Assessment 캐시 초기화 완료');
 
       // 현재 달과 다음 달 데이터를 병렬로 가져오기
       final results = await Future.wait([
-        _assessmentService.getAssessmentsForMonth(
+        _assessmentRepository.getForMonth(
+          academyId: userAcademyId,
           dateTime: currentMonthStart,
-          userAcademyId: userAcademyId,
         ),
-        _assessmentService.getAssessmentsForMonth(
+        _assessmentRepository.getForMonth(
+          academyId: userAcademyId,
           dateTime: nextMonthStart,
-          userAcademyId: userAcademyId,
         ),
       ]);
 
@@ -366,7 +398,10 @@ class _HomePageState extends State<HomePage> {
     }
 
     try {
-      final userAcademyId = await _getUserAcademyId();
+      final userAcademyId = await getUserAcademyId(
+        academyService: _academyService,
+        registeredAcademies: _registeredAcademies,
+      );
 
       // 학원 ID가 없으면 빈 리스트 설정
       if (userAcademyId == null) {
@@ -376,9 +411,9 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      final assessments = await _assessmentService.getAssessmentsForDate(
+      final assessments = await _assessmentRepository.getForDate(
+        academyId: userAcademyId,
         date: dateStr,
-        userAcademyId: userAcademyId,
       );
 
       setState(() {
@@ -396,44 +431,6 @@ class _HomePageState extends State<HomePage> {
   /// 날짜 포맷팅 (YYYY-MM-DD)
   String _formatDate(DateTime date) {
     return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-
-  /// User Academy ID 가져오기 (디폴트 학원의 academy_user_id 조회)
-  /// 학원이 없으면 null 반환
-  Future<String?> _getUserAcademyId() async {
-    final academyCode = await _academyService.getDefaultAcademyCode();
-    if (academyCode == null) {
-      developer.log('⚠️ [HomePage] No default academy code found');
-      return null;
-    }
-
-    // 메모리의 _registeredAcademies에서 먼저 찾기
-    UserAcademyResponse? academy;
-    if (_registeredAcademies.isNotEmpty) {
-      try {
-        academy = _registeredAcademies.firstWhere(
-          (a) => a.academyCode == academyCode,
-        );
-      } catch (e) {
-        // 메모리에 없으면 캐시에서 찾기
-        academy = await _academyService.getAcademyByCode(academyCode);
-      }
-    } else {
-      // 메모리에 없으면 캐시에서 찾기
-      academy = await _academyService.getAcademyByCode(academyCode);
-    }
-
-    if (academy == null) {
-      developer.log('⚠️ [HomePage] Academy not found for code: $academyCode');
-      return null;
-    }
-
-    // academy_user_id 반환 (API는 숫자 ID를 기대)
-    final userAcademyId = academy.academy_user_id?.toString();
-    developer.log(
-      '✅ [HomePage] User Academy ID: $userAcademyId (from academyCode: $academyCode)',
-    );
-    return userAcademyId;
   }
 
   /// 선택된 날짜의 완료된 날짜 Set 계산
@@ -499,6 +496,7 @@ class _HomePageState extends State<HomePage> {
                 homeworkDeadlines: _getHomeworkDeadlines(),
                 dateAssessments: _dateAssessments,
                 onDateSelected: _onDateSelected,
+                selectedDate: _selectedDate,
               ),
               SizedBox(height: screenHeight * 0.0297), // 26px → 2.97%
               _buildTodayHomeworkSection(),
@@ -772,10 +770,19 @@ class _HomePageState extends State<HomePage> {
                 color: Color(0xFF333333),
               ),
             ),
-            Icon(
-              Icons.chevron_right,
-              color: Colors.grey[600],
-              size: MediaQuery.of(context).size.width * 0.06,
+            InkWell(
+              onTap: () {
+                Navigator.pushNamed(context, AppRoutes.homeworkStatus);
+              },
+              borderRadius: BorderRadius.circular(24),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  Icons.chevron_right,
+                  color: Colors.grey[600],
+                  size: MediaQuery.of(context).size.width * 0.06,
+                ),
+              ),
             ),
           ],
         ),
@@ -791,13 +798,10 @@ class _HomePageState extends State<HomePage> {
     // 메서드 호출 여부 확인
     developer.log('🔵 [HomePage] _buildHomeworkList() 호출됨');
     developer.log('🔵 [HomePage] _academyState: $_academyState');
-    print('🔵 [HomePage] _buildHomeworkList() 호출됨');
-    print('🔵 [HomePage] _academyState: $_academyState');
 
     // 학원이 없을 때 안내 표시
     if (_academyState != AcademyState.ready) {
       developer.log('⚠️ [HomePage] _academyState가 ready가 아님. early return');
-      print('⚠️ [HomePage] _academyState가 ready가 아님. early return');
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(20),
@@ -832,14 +836,6 @@ class _HomePageState extends State<HomePage> {
     developer.log(
       '📋 [HomePage] _dateAssessments 전체 키: ${_dateAssessments.keys.toList()}',
     );
-    print('📋 [HomePage] 선택된 날짜: $dateStr');
-    print('📋 [HomePage] 선택된 날짜의 과제 수: ${assessments.length}');
-    print(
-      '📋 [HomePage] 선택된 날짜의 과제 목록: ${assessments.map((e) => e.assessName).toList()}',
-    );
-    print(
-      '📋 [HomePage] _dateAssessments 전체 키: ${_dateAssessments.keys.toList()}',
-    );
 
     for (var assessment in assessments) {
       developer.log('📋 [HomePage] 과제 이름: ${assessment.assessName}');
@@ -847,14 +843,6 @@ class _HomePageState extends State<HomePage> {
       developer.log('📋 [HomePage] 과제 상태: ${assessment.assessStatus}');
       developer.log('📋 [HomePage] 과제 페이지: ${assessment.assessPage}');
       developer.log('📋 [HomePage] 과제 썸네일: ${assessment.bookCoverImage}');
-      print('📋 [HomePage] 과제 이름: ${assessment.assessName}');
-      print('📋 [HomePage] 과제 클래스: ${assessment.assessClass}');
-      print('📋 [HomePage] 과제 상태: ${assessment.assessStatus}');
-      print('📋 [HomePage] 과제 페이지: ${assessment.assessPage}');
-      print('📋 [HomePage] 과제 썸네일: ${assessment.bookCoverImage}');
-      print(
-        '📋 [HomePage] 과제 요약: ${assessment.assessName} (${assessment.assessClass}) - ${assessment.assessStatus}',
-      );
     }
 
     if (assessments.isEmpty) {
@@ -1325,33 +1313,29 @@ class _HomePageState extends State<HomePage> {
   // 헬퍼 메서드들
 
   int _getConsecutiveDays() {
-    // Assessment 데이터에서 연속 학습 일수 계산
     final completedDates = _getCompletedDates();
     if (completedDates.isEmpty) return 0;
 
-    // 날짜 정렬
-    final sortedDates = completedDates.toList()..sort();
+    final completedSet = completedDates.toSet();
+    DateTime today = DateTime.now();
+    DateTime cursor = DateTime(today.year, today.month, today.day);
 
-    // 연속된 날짜 개수 계산
-    int consecutive = 1;
-    int maxConsecutive = 1;
-
-    for (int i = 1; i < sortedDates.length; i++) {
-      final prevDate = DateTime.parse(sortedDates[i - 1]);
-      final currDate = DateTime.parse(sortedDates[i]);
-      final diff = currDate.difference(prevDate).inDays;
-
-      if (diff == 1) {
-        consecutive++;
-        maxConsecutive = consecutive > maxConsecutive
-            ? consecutive
-            : maxConsecutive;
-      } else {
-        consecutive = 1;
-      }
+    final todayKey = _formatDate(cursor);
+    if (!completedSet.contains(todayKey)) {
+      cursor = cursor.subtract(const Duration(days: 1));
     }
 
-    return maxConsecutive;
+    int streak = 0;
+    while (true) {
+      final key = _formatDate(cursor);
+      if (!completedSet.contains(key)) {
+        break;
+      }
+      streak++;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+
+    return streak;
   }
 
   String _getStatusText(String status) {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -19,6 +20,9 @@ class AcademyService {
 
   // 클래스 정보 캐시 (메모리)
   final Map<String, String> _classCache = {};
+
+  /// 디폴트 학원 변경 감지용 노티파이어
+  final ValueNotifier<int> defaultAcademyVersion = ValueNotifier<int>(0);
 
   /// 근처 학원 리스트 조회
   Future<List<AcademyResponse>> getNearbyAcademies({
@@ -217,29 +221,89 @@ class AcademyService {
     }
   }
 
+  /// 학원 탈퇴 요청
+  Future<void> leaveAcademy(int academyUserId) async {
+    try {
+      final token = await _authService.getAccessToken();
+      if (token == null) {
+        throw Exception('인증 토큰이 없습니다. 다시 로그인해주세요.');
+      }
+
+      final uri = Uri.parse(
+        '${ApiConfig.baseUrl}/academy/academy-users/$academyUserId/leave',
+      );
+      developer.log('🔴 [AcademyService] Leaving academy: $uri');
+
+      final response = await http.delete(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      developer.log('Response status: ${response.statusCode}');
+      developer.log('Response body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 202) {
+        developer.log('✅ 학원 탈퇴 요청 성공');
+        await _removeAcademyFromCache(academyUserId);
+        return;
+      } else if (response.statusCode == 401) {
+        throw Exception('인증에 실패했습니다. 다시 로그인해주세요.');
+      } else {
+        final message = response.body.isNotEmpty ? response.body : '응답 없음';
+        throw Exception('학원 탈퇴 요청에 실패했습니다: $message');
+      }
+    } catch (e) {
+      developer.log('❌ 학원 탈퇴 요청 실패: $e');
+      rethrow;
+    }
+  }
+
   // TODO: 백엔드에서 academyId로 학원 상세 정보를 가져오는 API가 구현 중입니다.
   // 완료 후 frontend에서도 구현 예정입니다.
 
-  /// 학원 목록을 SharedPreferences에 저장
+  /// 학원 목록을 SharedPreferences에 저장 (사용자별)
   Future<void> saveAcademiesToCache(List<UserAcademyResponse> academies) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final userId = await _authService.getUserId();
+      if (userId == null) {
+        developer.log('⚠️ 학원 목록 캐시 저장 실패: userId 없음');
+        return;
+      }
+      final cacheKey = '${_academiesCacheKey}_$userId';
       final jsonData = json.encode(
         academies.map((academy) => academy.toJson()).toList(),
       );
-      await prefs.setString(_academiesCacheKey, jsonData);
-      developer.log('✅ 학원 목록 캐시 저장 완료 (${academies.length}개)');
+      await prefs.setString(cacheKey, jsonData);
+      developer.log('✅ 학원 목록 캐시 저장 완료 (${academies.length}개) - key: $cacheKey');
+      // 구 버전 캐시 제거
+      if (prefs.containsKey(_academiesCacheKey)) {
+        await prefs.remove(_academiesCacheKey);
+      }
     } catch (e) {
       developer.log('❌ 학원 목록 캐시 저장 실패: $e');
     }
   }
 
-  /// SharedPreferences에서 학원 목록 로드
+  /// SharedPreferences에서 학원 목록 로드 (사용자별)
   Future<List<UserAcademyResponse>?> loadAcademiesFromCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final cachedJson = prefs.getString(_academiesCacheKey);
+      final userId = await _authService.getUserId();
+      if (userId == null) {
+        developer.log('⚠️ 학원 목록 캐시 로드 실패: userId 없음');
+        return null;
+      }
+      final cacheKey = '${_academiesCacheKey}_$userId';
+      final cachedJson = prefs.getString(cacheKey);
       if (cachedJson == null) {
+        // 구 버전 캐시 제거
+        if (prefs.containsKey(_academiesCacheKey)) {
+          await prefs.remove(_academiesCacheKey);
+        }
         return null;
       }
 
@@ -255,8 +319,15 @@ class AcademyService {
   Future<void> saveDefaultAcademyCode(String academyCode) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final currentCode = prefs.getString(_defaultAcademyCodeKey);
+      if (currentCode == academyCode) {
+        developer.log('ℹ️ 디폴트 학원 코드 동일 → 변경 생략');
+        return;
+      }
+
       await prefs.setString(_defaultAcademyCodeKey, academyCode);
       developer.log('✅ 디폴트 학원 코드 저장 완료: $academyCode');
+      defaultAcademyVersion.value++;
     } catch (e) {
       developer.log('❌ 디폴트 학원 코드 저장 실패: $e');
     }
@@ -407,18 +478,13 @@ class AcademyService {
     // 2. 캐시에 없는 ID들만 API 호출
     if (uncachedIds.isNotEmpty) {
       try {
-        print(
-          '🔍 [AcademyService] API 호출 시작: uncachedIds=${uncachedIds.toList()}',
-        );
         final token = await _authService.getAccessToken();
         if (token == null) {
-          print('❌ [AcademyService] 인증 토큰 없음');
           developer.log('No access token available');
           throw Exception('인증 토큰이 없습니다. 로그인이 필요합니다.');
         }
 
         final uri = ApiConfig.getAcademyClassesUri(uncachedIds);
-        print('🔍 [AcademyService] API URI: $uri');
         developer.log('Fetching classes from: $uri');
 
         final response = await http.get(
@@ -429,77 +495,45 @@ class AcademyService {
           },
         );
 
-        print('🔍 [AcademyService] Response status: ${response.statusCode}');
-        print('🔍 [AcademyService] Response body: ${response.body}');
         developer.log('Response status: ${response.statusCode}');
         developer.log('Response body: ${response.body}');
 
         if (response.statusCode == 200) {
           final List<dynamic> data = json.decode(response.body);
-          print('🔍 [AcademyService] API 응답 데이터: $data');
-          print('🔍 [AcademyService] 응답 데이터 타입: ${data.runtimeType}');
-          print('🔍 [AcademyService] 응답 데이터 길이: ${data.length}');
 
           // academyUserId == assigneeId 이므로, academyUserId를 키로 사용
           for (var item in data) {
-            print('🔍 [AcademyService] 아이템: $item');
-            print('🔍 [AcademyService] 아이템 타입: ${item.runtimeType}');
-            if (item is Map) {
-              print('🔍 [AcademyService] 아이템 키: ${item.keys.toList()}');
-            } else {
-              print('🔍 [AcademyService] 아이템 키: N/A');
-            }
-
             final academyUserId = item['academyUserId']?.toString() ?? '';
             final className = item['className']?.toString() ?? '';
-            print(
-              '🔍 [AcademyService] 파싱: academyUserId=$academyUserId, className=$className',
-            );
-            print(
-              '🔍 [AcademyService] academyUserId 타입: ${item['academyUserId'].runtimeType}',
-            );
-            print(
-              '🔍 [AcademyService] className 타입: ${item['className'].runtimeType}',
-            );
 
             if (academyUserId.isNotEmpty && className.isNotEmpty) {
               _classCache[academyUserId] = className;
-              print('✅ [AcademyService] 캐시 저장: $academyUserId -> $className');
-            } else {
-              print(
-                '⚠️ [AcademyService] 빈 값 발견: academyUserId=$academyUserId, className=$className',
-              );
             }
           }
 
           developer.log('✅ Class names cached: ${_classCache.length} classes');
-          print('✅ [AcademyService] 총 ${_classCache.length}개 클래스 캐시됨');
-          print('🔍 [AcademyService] 현재 캐시 내용: $_classCache');
         } else if (response.statusCode == 401) {
-          print('❌ [AcademyService] 인증 실패 (401)');
           throw Exception('인증에 실패했습니다. 다시 로그인해주세요.');
         } else {
-          print('⚠️ [AcademyService] API 실패: ${response.statusCode}');
           developer.log(
             '⚠️ Failed to fetch class names: ${response.statusCode}',
           );
           // API 실패 시 빈 맵 반환 (에러는 throw하지 않음)
         }
       } catch (e, stackTrace) {
-        print('❌ [AcademyService] 에러 발생: $e');
-        print('❌ [AcademyService] 스택 트레이스: $stackTrace');
-        developer.log('⚠️ Error fetching classes: $e');
+        developer.log(
+          '⚠️ Error fetching classes: $e',
+          error: e,
+          stackTrace: stackTrace,
+        );
         // 에러 발생 시에도 캐시된 데이터는 반환
       }
-    } else {
-      print('ℹ️ [AcademyService] 모든 ID가 캐시에 있음, API 호출 스킵');
     }
 
     // 3. 캐시에서 결과 반환 (요청한 모든 ID에 대해)
     final result = Map.fromEntries(
       assigneeIds.map((id) => MapEntry(id, _classCache[id] ?? '')),
     );
-    print('🔍 [AcademyService] 반환할 classMap: $result');
     return result;
   }
 
@@ -507,6 +541,25 @@ class AcademyService {
   void clearClassCache() {
     _classCache.clear();
     developer.log('✅ Class cache cleared');
+  }
+
+  Future<void> _removeAcademyFromCache(int academyUserId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = await _authService.getUserId();
+      if (userId == null) return;
+
+      final cacheKey = '${_academiesCacheKey}_$userId';
+      final cachedJson = prefs.getString(cacheKey);
+      if (cachedJson == null) return;
+
+      final List<dynamic> data = json.decode(cachedJson);
+      data.removeWhere((item) => item['academy_user_id'] == academyUserId);
+      await prefs.setString(cacheKey, json.encode(data));
+      developer.log('✅ 캐시에서 학원 제거 완료: $academyUserId');
+    } catch (e) {
+      developer.log('⚠️ 캐시 학원 제거 실패: $e');
+    }
   }
 }
 

@@ -20,6 +20,10 @@ class ApiConfig {
   static const String checkAccountIdEndpoint = '/users/check-accountId';
   static const String resetPasswordEndpoint = '/users/reset-password';
   static const String changeResetPasswordEndpoint = '/change/reset_password';
+  static const String signOutEndpoint = '/sign-out';
+  static const String uploadStreamEndpoint = '/storage/storage/upload-stream';
+  static const String uploadUrlBatchEndpoint =
+      '/storage/storage/upload-url/batch';
 
   // 인증 코드 발송
   static const String sendCodeSignUpEndpoint = '/send-code/sign_up';
@@ -56,6 +60,11 @@ class ApiConfig {
       Uri.parse('$baseUrl$resetPasswordEndpoint');
   static Uri getChangeResetPasswordUri() =>
       Uri.parse('$baseUrl$changeResetPasswordEndpoint');
+  static Uri getSignOutUri() => Uri.parse('$baseUrl$signOutEndpoint');
+  static Uri getUploadStreamUri() =>
+      Uri.parse('$baseUrl$uploadStreamEndpoint');
+  static Uri getUploadUrlBatchUri() =>
+      Uri.parse('$baseUrl$uploadUrlBatchEndpoint');
 
   // 인증 코드 발송
   static Uri getSendCodeSignUpUri() =>
@@ -80,16 +89,9 @@ class ApiConfig {
   }) {
     // 새로운 방식: DateTime을 ISO 8601 형식으로 변환
     if (dateTime != null) {
-      // ISO 8601 형식으로 변환 (UTC 기준)
-      // 해당 월의 첫 번째 날, 00:00:00 UTC로 설정
       final monthStart = DateTime.utc(dateTime.year, dateTime.month, 1);
-
-      // "2025-11-01T00:00:00.000Z" -> "2025-11-01T00:00:00" (밀리초와 Z 제거)
       final iso8601Str = monthStart.toIso8601String().split('.').first;
-
-      // URL 경로에 사용하므로 특수 문자 인코딩 필요
       final encodedIso8601 = Uri.encodeComponent(iso8601Str);
-
       return Uri.parse(
         '$baseUrl$assessmentsAssigneeEndpoint/$userAcademyId/$encodedIso8601',
       );

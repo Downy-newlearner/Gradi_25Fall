@@ -5,6 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../domain/notification/notification_entity.dart';
+import '../domain/notification/notification_repository.dart';
+import '../data/notification/notification_local_data_source.dart';
+import '../data/notification/notification_repository_impl.dart';
 
 class FCMService {
   static final FCMService _instance = FCMService._internal();
@@ -163,13 +168,21 @@ class FCMService {
   }
 
   /// 포그라운드 메시지 처리
-  void _handleForegroundMessage(RemoteMessage message) {
+  void _handleForegroundMessage(RemoteMessage message) async {
     developer.log('포그라운드 메시지 수신: ${message.messageId}');
 
     // 알림 표시
     _showLocalNotification(message);
 
-    // TODO: 알림 목록 업데이트 (상태 관리 필요)
+    // 알림 저장
+    try {
+      final repository = await buildNotificationRepository();
+      final entity = NotificationEntity.fromRemoteMessage(message);
+      await repository.saveNotification(entity);
+      developer.log('✅ 포그라운드 알림 저장 완료: ${entity.id}');
+    } catch (e) {
+      developer.log('❌ 포그라운드 알림 저장 실패: $e');
+    }
   }
 
   /// 로컬 알림 표시
@@ -260,11 +273,33 @@ class FCMService {
       developer.log('알림 읽음 처리 중 오류 발생: $e');
     }
   }
+
+  /// NotificationRepository 팩토리 함수
+  Future<NotificationRepository> buildNotificationRepository() async {
+    final prefs = await SharedPreferences.getInstance();
+    final local = NotificationLocalDataSource(prefs);
+    return NotificationRepositoryImpl(local);
+  }
+}
+
+/// NotificationRepository 팩토리 함수 (백그라운드용)
+Future<NotificationRepository> _buildNotificationRepositoryForBackground() async {
+  final prefs = await SharedPreferences.getInstance();
+  final local = NotificationLocalDataSource(prefs);
+  return NotificationRepositoryImpl(local);
 }
 
 /// 백그라운드 메시지 핸들러 (최상위 함수여야 함)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   developer.log('백그라운드 메시지 수신: ${message.messageId}');
-  // TODO: 백그라운드에서 알림 데이터 저장 등 처리
+  
+  try {
+    final repository = await _buildNotificationRepositoryForBackground();
+    final entity = NotificationEntity.fromRemoteMessage(message);
+    await repository.saveNotification(entity);
+    developer.log('✅ 백그라운드 알림 저장 완료: ${entity.id}');
+  } catch (e) {
+    developer.log('❌ 백그라운드 알림 저장 실패: $e');
+  }
 }

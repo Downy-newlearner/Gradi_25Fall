@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../routes/app_routes.dart';
+import '../../services/auth_service.dart';
+import '../../services/user_service.dart';
+import '../../models/user.dart';
 import '../../widgets/back_button.dart';
 
 /// 계정 관리 페이지
@@ -11,10 +15,69 @@ class AccountManagementPage extends StatefulWidget {
 }
 
 class _AccountManagementPageState extends State<AccountManagementPage> {
-  // TODO: 서버에서 사용자 정보 가져오기
-  String _email = 'user@example.com';
-  String _phoneNumber = '010-1234-5678';
-  String _birthDate = '2005.03.15';
+  final UserService _userService = UserService();
+  bool _isLoadingProfile = true;
+  bool _isLoggingOut = false;
+  String? _email;
+  String? _phoneNumber;
+  String? _birthDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _userService.addListener(_handleUserUpdated);
+    _loadUserProfile();
+  }
+
+  @override
+  void dispose() {
+    _userService.removeListener(_handleUserUpdated);
+    super.dispose();
+  }
+
+  Future<void> _loadUserProfile() async {
+    final cachedUser = _userService.getUser();
+    if (cachedUser != null) {
+      setState(() {
+        _applyUserData(cachedUser);
+        _isLoadingProfile = false;
+      });
+    } else {
+      setState(() {
+        _isLoadingProfile = true;
+      });
+    }
+
+    final fetchedUser = await _userService.fetchUserFromServer();
+    if (!mounted) return;
+
+    if (fetchedUser != null) {
+      setState(() {
+        _applyUserData(fetchedUser);
+      });
+    } else if (cachedUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('사용자 정보를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.')),
+      );
+    }
+
+    setState(() {
+      _isLoadingProfile = false;
+    });
+  }
+
+  void _handleUserUpdated(User? user) {
+    if (!mounted || user == null) return;
+    setState(() {
+      _applyUserData(user);
+    });
+  }
+
+  void _applyUserData(User user) {
+    _email = user.email;
+    _phoneNumber = user.phoneNumber;
+    _birthDate = user.birthDate;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,11 +98,21 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
                     // 개인정보 섹션
                     _buildSectionTitle('개인정보'),
                     const SizedBox(height: 12),
-                    _buildInfoItem('이메일', _email, Icons.email_outlined),
-                    _buildInfoItem('전화번호', _phoneNumber, Icons.phone_outlined),
+                    _buildInfoItem(
+                      '이메일',
+                      _isLoadingProfile ? null : _formatEmail(_email),
+                      Icons.email_outlined,
+                    ),
+                    _buildInfoItem(
+                      '전화번호',
+                      _isLoadingProfile
+                          ? null
+                          : _formatPhoneNumber(_phoneNumber),
+                      Icons.phone_outlined,
+                    ),
                     _buildInfoItem(
                       '생년월일',
-                      _birthDate,
+                      _isLoadingProfile ? null : _formatBirthDate(_birthDate),
                       Icons.cake_outlined,
                     ),
 
@@ -48,30 +121,18 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
                     // 보안 섹션
                     _buildSectionTitle('보안'),
                     const SizedBox(height: 12),
-                    _buildActionItem(
-                      '비밀번호 변경',
-                      Icons.lock_outlined,
-                      () {
-                        // TODO: 비밀번호 변경 페이지로 이동
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('비밀번호 변경 기능 구현 예정'),
-                          ),
-                        );
-                      },
-                    ),
-                    _buildActionItem(
-                      '2단계 인증',
-                      Icons.security_outlined,
-                      () {
-                        // TODO: 2단계 인증 설정 페이지로 이동
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('2단계 인증 기능 구현 예정'),
-                          ),
-                        );
-                      },
-                    ),
+                    _buildActionItem('비밀번호 변경', Icons.lock_outlined, () {
+                      // TODO: 비밀번호 변경 페이지로 이동
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('비밀번호 변경 기능 구현 예정')),
+                      );
+                    }),
+                    _buildActionItem('2단계 인증', Icons.security_outlined, () {
+                      // TODO: 2단계 인증 설정 페이지로 이동
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('2단계 인증 기능 구현 예정')),
+                      );
+                    }),
 
                     const SizedBox(height: 32),
 
@@ -85,15 +146,11 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
                         _showLogoutDialog();
                       },
                       isDestructive: false,
+                      isBusy: _isLoggingOut,
                     ),
-                    _buildActionItem(
-                      '회원 탈퇴',
-                      Icons.person_remove_outlined,
-                      () {
-                        _showDeleteAccountDialog();
-                      },
-                      isDestructive: true,
-                    ),
+                    _buildActionItem('회원 탈퇴', Icons.person_remove_outlined, () {
+                      _showDeleteAccountDialog();
+                    }, isDestructive: true),
 
                     const SizedBox(height: 20),
                   ],
@@ -149,7 +206,7 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
     );
   }
 
-  Widget _buildInfoItem(String label, String value, IconData icon) {
+  Widget _buildInfoItem(String label, String? value, IconData icon) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -160,7 +217,13 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 24, color: const Color(0xFF666666)),
+          Tooltip(
+            message: '$label 아이콘',
+            child: Semantics(
+              label: '$label 아이콘',
+              child: Icon(icon, size: 24, color: const Color(0xFF666666)),
+            ),
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
@@ -177,12 +240,15 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  value,
-                  style: const TextStyle(
+                  value ?? '불러오는 중...',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
                     fontFamily: 'Pretendard',
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
-                    color: Color(0xFF333333),
+                    color: value == null
+                        ? const Color(0xFF999999)
+                        : const Color(0xFF333333),
                   ),
                 ),
               ],
@@ -198,6 +264,7 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
     IconData icon,
     VoidCallback onTap, {
     bool isDestructive = false,
+    bool isBusy = false,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -205,7 +272,7 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
-          onTap: onTap,
+          onTap: isBusy ? null : onTap,
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -240,13 +307,23 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
                     ),
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right,
-                  size: 24,
-                  color: isDestructive
-                      ? const Color(0xFFF44336)
-                      : const Color(0xFF999999),
-                ),
+                if (isBusy)
+                  const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Color(0xFF999999)),
+                    ),
+                  )
+                else
+                  Icon(
+                    Icons.chevron_right,
+                    size: 24,
+                    color: isDestructive
+                        ? const Color(0xFFF44336)
+                        : const Color(0xFF999999),
+                  ),
               ],
             ),
           ),
@@ -267,13 +344,12 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
             child: const Text('취소'),
           ),
           TextButton(
-            onPressed: () {
-              // TODO: 로그아웃 로직 구현
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('로그아웃 되었습니다')),
-              );
-            },
+            onPressed: _isLoggingOut
+                ? null
+                : () {
+                    Navigator.pop(context);
+                    _performLogout();
+                  },
             child: const Text('로그아웃'),
           ),
         ],
@@ -281,14 +357,41 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
     );
   }
 
+  Future<void> _performLogout() async {
+    if (_isLoggingOut) return;
+    setState(() {
+      _isLoggingOut = true;
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final authService = AuthService();
+      await authService.signOutFromServer();
+      await authService.clearTokens();
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.login,
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('로그아웃 중 오류가 발생했습니다: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoggingOut = false;
+        });
+      }
+    }
+  }
+
   void _showDeleteAccountDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('회원 탈퇴'),
-        content: const Text(
-          '정말 탈퇴하시겠습니까?\n모든 데이터가 삭제되며 복구할 수 없습니다.',
-        ),
+        content: const Text('정말 탈퇴하시겠습니까?\n모든 데이터가 삭제되며 복구할 수 없습니다.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -298,9 +401,9 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
             onPressed: () {
               // TODO: 회원 탈퇴 로직 구현
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('회원 탈퇴 기능 구현 예정')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('회원 탈퇴 기능 구현 예정')));
             },
             style: TextButton.styleFrom(
               foregroundColor: const Color(0xFFF44336),
@@ -311,5 +414,36 @@ class _AccountManagementPageState extends State<AccountManagementPage> {
       ),
     );
   }
-}
 
+  String _formatEmail(String? rawEmail) {
+    if (rawEmail == null || rawEmail.trim().isEmpty) {
+      return '미등록';
+    }
+    return rawEmail.trim().toLowerCase();
+  }
+
+  String _formatPhoneNumber(String? rawNumber) {
+    if (rawNumber == null || rawNumber.trim().isEmpty) {
+      return '미등록';
+    }
+    final digits = rawNumber.replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 11) {
+      return '${digits.substring(0, 3)}-${digits.substring(3, 7)}-${digits.substring(7)}';
+    }
+    return rawNumber;
+  }
+
+  String _formatBirthDate(String? rawDate) {
+    if (rawDate == null || rawDate.trim().isEmpty) {
+      return '미등록';
+    }
+    try {
+      final date = DateTime.parse(rawDate);
+      return '${date.year.toString().padLeft(4, '0')}.'
+          '${date.month.toString().padLeft(2, '0')}.'
+          '${date.day.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return rawDate;
+    }
+  }
+}

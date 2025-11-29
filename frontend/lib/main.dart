@@ -87,7 +87,7 @@ class GradiApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
 
       // Routing configuration
-      initialRoute: AppRoutes.loading, // 로딩 페이지로 시작
+      initialRoute: AppRoutes.loading, // 자동 로그인 로직 실행을 위해 로딩 페이지로 시작
       routes: AppRoutes.routes,
       onGenerateRoute: AppRoutes.onGenerateRoute,
 

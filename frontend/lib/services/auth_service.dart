@@ -422,4 +422,28 @@ class AuthService {
       developer.log('Failed to clear tokens: $e');
     }
   }
+
+  Future<void> signOutFromServer() async {
+    try {
+      final token = await getAccessToken();
+      if (token == null) {
+        developer.log('⚠️ signOut skipped: no access token');
+        return;
+      }
+
+      final response = await http.post(
+        ApiConfig.getSignOutUri(),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      developer.log(
+        '[AuthService] sign-out response: ${response.statusCode} ${response.body}',
+      );
+    } catch (e) {
+      developer.log('⚠️ signOutFromServer failed: $e');
+    }
+  }
 }

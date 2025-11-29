@@ -35,6 +35,7 @@ import '../screens/upload/upload_images_page.dart';
 import '../screens/upload/edit_grading_result_page.dart';
 import '../screens/continuous_learning_detail_page.dart';
 import '../screens/loading_page.dart';
+import '../screens/problem_solution_temp_page.dart';
 
 class AppRoutes {
   static const String mainNavigation = '/';
@@ -73,6 +74,7 @@ class AppRoutes {
   static const String resetPassword = '/reset-password';
   static const String uploadImages = '/upload/images';
   static const String editGradingResult = '/upload/edit-result';
+  static const String problemTemp = '/problem-temp';
 
   static Map<String, WidgetBuilder> get routes => {
     mainNavigation: (context) => const MainNavigationPage(),
@@ -98,6 +100,7 @@ class AppRoutes {
     findPassword: (context) => const FindPasswordPage(),
     findPasswordError: (context) => const FindPasswordErrorPage(),
     uploadImages: (context) => const UploadImagesPage(),
+    problemTemp: (context) => const ProblemSolutionTempPage(),
   };
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {

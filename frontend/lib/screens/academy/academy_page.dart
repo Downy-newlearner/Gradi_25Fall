@@ -26,7 +26,7 @@ class _AcademyPageState extends State<AcademyPage> {
   bool _hasRefreshedOnReturn = false; // didChangeDependencies에서 이미 갱신했는지 확인
   String? _errorMessage;
 
-  static const String _cacheKey = 'user_academies_cache';
+  static const String _cacheKeyBase = 'user_academies_cache';
 
   @override
   void initState() {
@@ -76,20 +76,18 @@ class _AcademyPageState extends State<AcademyPage> {
     });
 
     try {
+      final userId = await _authService.getUserId();
+      if (userId == null) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = '사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.';
+        });
+        return;
+      }
+      final cacheKey = '${_cacheKeyBase}_$userId';
       if (forceRefresh) {
         // 개발 환경에서 SSL 인증서 검증 우회 (프로덕션에서는 제거)
         HttpOverrides.global = MyHttpOverrides();
-
-        // 강제 갱신: API 호출
-        final userId = await _authService.getUserId();
-        developer.log('🔵 [AcademyPage] getUserId() 결과: $userId');
-        if (userId == null) {
-          setState(() {
-            _isLoading = false;
-            _errorMessage = '사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.';
-          });
-          return;
-        }
 
         developer.log('🔵 [AcademyPage] getUserAcademies 호출, userId: $userId');
         try {
@@ -138,7 +136,7 @@ class _AcademyPageState extends State<AcademyPage> {
             _isLoading = false;
           });
 
-          await _saveToCache(academyItems);
+          await _saveToCache(academyItems, cacheKey);
           developer.log(
             '✅ [AcademyPage] Loaded ${academyItems.length} academies from API and cached',
           );
@@ -151,7 +149,7 @@ class _AcademyPageState extends State<AcademyPage> {
         }
       } else {
         // 기본: SharedPreferences에서 캐시 로드
-        final cachedData = await _loadFromCache();
+        final cachedData = await _loadFromCache(cacheKey);
         if (cachedData.isNotEmpty) {
           setState(() {
             _registeredAcademies.clear();
@@ -179,11 +177,14 @@ class _AcademyPageState extends State<AcademyPage> {
   }
 
   /// SharedPreferences에서 캐시 로드
-  Future<List<AcademyItem>> _loadFromCache() async {
+  Future<List<AcademyItem>> _loadFromCache(String cacheKey) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final cachedJson = prefs.getString(_cacheKey);
+      final cachedJson = prefs.getString(cacheKey);
       if (cachedJson == null) {
+        if (prefs.containsKey(_cacheKeyBase)) {
+          await prefs.remove(_cacheKeyBase);
+        }
         return [];
       }
 
@@ -196,13 +197,19 @@ class _AcademyPageState extends State<AcademyPage> {
   }
 
   /// SharedPreferences에 캐시 저장
-  Future<void> _saveToCache(List<AcademyItem> academies) async {
+  Future<void> _saveToCache(
+    List<AcademyItem> academies,
+    String cacheKey,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final jsonData = json.encode(
         academies.map((academy) => academy.toJson()).toList(),
       );
-      await prefs.setString(_cacheKey, jsonData);
+      await prefs.setString(cacheKey, jsonData);
+      if (prefs.containsKey(_cacheKeyBase)) {
+        await prefs.remove(_cacheKeyBase);
+      }
       developer.log('Cache saved successfully');
     } catch (e) {
       developer.log('Error saving cache: $e');

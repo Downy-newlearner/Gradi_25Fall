@@ -27,8 +27,6 @@ class Assessment {
   /// 1. API 응답 형식 (camelCase): assessName, assessStartPage, assigneeId, book.bookId 등
   /// 2. 캐시 저장 형식 (snake_case): assess_name, assess_page, assess_class 등
   factory Assessment.fromJson(Map<String, dynamic> json) {
-    // 디버깅: 입력 JSON 확인
-    print('🔍 [Assessment.fromJson] 입력 JSON 키: ${json.keys.toList()}');
 
     // 1. assessPage 파싱 (두 가지 형식 지원)
     String assessPage;
@@ -81,14 +79,6 @@ class Assessment {
         json['assess_status']?.toString() ??
         'N';
 
-    // 디버깅: 파싱 결과 확인
-    print('🔍 [Assessment.fromJson] 파싱 결과:');
-    print('  - assessName: $assessName');
-    print('  - assessStatus: $assessStatus');
-    print('  - assessPage: $assessPage');
-    print('  - assessClass: $assessClass');
-    print('  - bookId: $bookId');
-    print('  - bookImageUrl: $bookImageUrl');
 
     return Assessment(
       bookId: bookId,

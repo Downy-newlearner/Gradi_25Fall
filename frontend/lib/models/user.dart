@@ -4,16 +4,37 @@
 class User {
   final int userId;
   final String name;
+  final String? email;
+  final String? accountId;
+  final String? phoneNumber;
+  final String? birthDate;
   final String? profileImageUrl;
-  // 추후 확장 가능: 이메일, 전화번호 등
 
-  User({required this.userId, required this.name, this.profileImageUrl});
+  User({
+    required this.userId,
+    required this.name,
+    this.email,
+    this.accountId,
+    this.phoneNumber,
+    this.birthDate,
+    this.profileImageUrl,
+  });
 
   /// JSON에서 User 객체 생성
   factory User.fromJson(Map<String, dynamic> json) {
+    final dynamic userIdValue = json['user_id'] ?? json['userId'];
+    final int parsedUserId = userIdValue is int
+        ? userIdValue
+        : int.tryParse(userIdValue?.toString() ?? '') ?? 0;
+
     return User(
-      userId: json['user_id'] as int,
+      userId: parsedUserId,
       name: json['name'] as String,
+      email: json['email'] as String?,
+      accountId: json['account_id'] as String? ?? json['accountId'] as String?,
+      phoneNumber:
+          json['phone_number'] as String? ?? json['phoneNumber'] as String?,
+      birthDate: json['birth_date'] as String? ?? json['birthDate'] as String?,
       profileImageUrl: json['profile_image_url'] as String?,
     );
   }
@@ -23,12 +44,16 @@ class User {
     return {
       'user_id': userId,
       'name': name,
+      'email': email,
+      'account_id': accountId,
+      'phone_number': phoneNumber,
+      'birth_date': birthDate,
       'profile_image_url': profileImageUrl,
     };
   }
 
   @override
   String toString() {
-    return 'User(userId: $userId, name: $name, profileImageUrl: $profileImageUrl)';
+    return 'User(userId: $userId, name: $name, email: $email, accountId: $accountId, phoneNumber: $phoneNumber, birthDate: $birthDate, profileImageUrl: $profileImageUrl)';
   }
 }

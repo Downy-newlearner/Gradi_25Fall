@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_header_title.dart';
 import '../../widgets/app_header_menu_button.dart';
+import '../../domain/notification/notification_entity.dart';
+import '../../domain/notification/notification_type.dart';
+import '../../data/notification/notification_local_data_source.dart';
+import '../../data/notification/notification_repository_impl.dart';
+import '../../application/notification/notification_notifier.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 알림 페이지
 /// 학습 관련 알림, 숙제 마감 알림, 학원 공지사항 등을 표시하는 페이지
@@ -17,76 +23,102 @@ class NotificationPage extends StatefulWidget {
 }
 
 class _NotificationPageState extends State<NotificationPage> {
-  // TODO: 서버에서 알림 데이터 가져오기
-  final List<NotificationItem> _notifications = [
-    NotificationItem(
-      type: NotificationType.homework,
-      title: '숙제 마감 알림',
-      message: '블랙라벨 중등수학 1-1 - 1단원 숙제가 내일 마감됩니다.',
-      time: DateTime.now().subtract(const Duration(minutes: 10)),
-      isRead: false,
-    ),
-    NotificationItem(
-      type: NotificationType.learningReminder,
-      title: '학습 리마인더',
-      message: '오늘의 학습을 시작할 시간입니다!',
-      time: DateTime.now().subtract(const Duration(hours: 1)),
-      isRead: false,
-    ),
-    NotificationItem(
-      type: NotificationType.academyNotice,
-      title: '학원 공지사항',
-      message: '정다훈 학원: 다음 주 월요일은 휴원입니다.',
-      time: DateTime.now().subtract(const Duration(hours: 3)),
-      isRead: true,
-    ),
-    NotificationItem(
-      type: NotificationType.grading,
-      title: '채점 완료',
-      message: '수능완성 영어 2026 - 독해 1~10 채점이 완료되었습니다.',
-      time: DateTime.now().subtract(const Duration(hours: 5)),
-      isRead: true,
-    ),
-    NotificationItem(
-      type: NotificationType.achievement,
-      title: '학습 목표 달성',
-      message: '연속 학습 7일 달성! 축하합니다 🎉',
-      time: DateTime.now().subtract(const Duration(days: 1)),
-      isRead: true,
-    ),
-  ];
+  NotificationNotifier? _notificationNotifier;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeNotifier();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 페이지가 다시 표시될 때마다 알림 목록 새로고침
+    if (_notificationNotifier != null) {
+      _notificationNotifier!.load();
+    }
+  }
+
+  Future<void> _initializeNotifier() async {
+    final prefs = await SharedPreferences.getInstance();
+    final local = NotificationLocalDataSource(prefs);
+    final repository = NotificationRepositoryImpl(local);
+    final notifier = NotificationNotifier(repository);
+    await notifier.load();
+    if (mounted) {
+      setState(() {
+        _notificationNotifier = notifier;
+      });
+    }
+  }
+
+  /// 외부에서 호출 가능한 새로고침 메서드
+  /// MainNavigationPage에서 탭 전환 시 호출
+  void refresh() {
+    _notificationNotifier?.load();
+  }
+
+  @override
+  void dispose() {
+    _notificationNotifier?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final unreadCount = _notifications.where((n) => !n.isRead).length;
+    if (_notificationNotifier == null) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(child: Center(child: CircularProgressIndicator())),
+      );
+    }
+
+    final notifier = _notificationNotifier!;
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
-            // 헤더
-            _buildHeader(unreadCount),
+        child: ValueListenableBuilder<bool>(
+          valueListenable: notifier.isLoading,
+          builder: (context, isLoading, _) {
+            if (isLoading && notifier.notifications.value.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-            // 알림 목록
-            Expanded(
-              child: _notifications.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                      itemCount: _notifications.length,
-                      itemBuilder: (context, index) {
-                        return _buildNotificationCard(
-                          _notifications[index],
-                          index,
-                        );
-                      },
+            return ValueListenableBuilder<List<NotificationEntity>>(
+              valueListenable: notifier.notifications,
+              builder: (context, notifications, _) {
+                final unreadCount = notifier.unreadCount;
+
+                return Column(
+                  children: [
+                    // 헤더
+                    _buildHeader(unreadCount),
+
+                    // 알림 목록
+                    Expanded(
+                      child: notifications.isEmpty
+                          ? _buildEmptyState()
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 12,
+                              ),
+                              itemCount: notifications.length,
+                              itemBuilder: (context, index) {
+                                return _buildNotificationCard(
+                                  notifications[index],
+                                  index,
+                                );
+                              },
+                            ),
                     ),
-            ),
-          ],
+                  ],
+                );
+              },
+            );
+          },
         ),
       ),
     );
@@ -144,18 +176,19 @@ class _NotificationPageState extends State<NotificationPage> {
     );
   }
 
-  Widget _buildNotificationCard(NotificationItem notification, int index) {
+  Widget _buildNotificationCard(NotificationEntity notification, int index) {
     return Dismissible(
-      key: Key('notification_$index'),
+      key: Key('notification_${notification.id}'),
       direction: DismissDirection.endToStart,
-      onDismissed: (direction) {
-        setState(() {
-          _notifications.removeAt(index);
-        });
-        // TODO: 서버에 삭제 요청
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('알림이 삭제되었습니다')));
+      onDismissed: (direction) async {
+        if (_notificationNotifier != null) {
+          await _notificationNotifier!.delete(notification.id);
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('알림이 삭제되었습니다')));
+          }
+        }
       },
       background: Container(
         alignment: Alignment.centerRight,
@@ -327,22 +360,16 @@ class _NotificationPageState extends State<NotificationPage> {
     );
   }
 
-  void _markAsRead(NotificationItem notification) {
-    if (!notification.isRead) {
-      setState(() {
-        notification.isRead = true;
-      });
-      // TODO: 서버에 읽음 상태 업데이트
+  Future<void> _markAsRead(NotificationEntity notification) async {
+    if (!notification.isRead && _notificationNotifier != null) {
+      await _notificationNotifier!.markAsRead(notification.id);
     }
   }
 
-  void _markAllAsRead() {
-    setState(() {
-      for (var notification in _notifications) {
-        notification.isRead = true;
-      }
-    });
-    // TODO: 서버에 일괄 읽음 상태 업데이트
+  Future<void> _markAllAsRead() async {
+    if (_notificationNotifier != null) {
+      await _notificationNotifier!.markAllAsRead();
+    }
   }
 
   String _formatTime(DateTime time) {
@@ -361,30 +388,4 @@ class _NotificationPageState extends State<NotificationPage> {
       return '${time.year}.${time.month.toString().padLeft(2, '0')}.${time.day.toString().padLeft(2, '0')}';
     }
   }
-}
-
-/// 알림 타입
-enum NotificationType {
-  homework, // 숙제 관련
-  learningReminder, // 학습 리마인더
-  academyNotice, // 학원 공지사항
-  grading, // 채점 완료
-  achievement, // 학습 목표 달성
-}
-
-/// 알림 아이템 모델
-class NotificationItem {
-  final NotificationType type;
-  final String title;
-  final String message;
-  final DateTime time;
-  bool isRead;
-
-  NotificationItem({
-    required this.type,
-    required this.title,
-    required this.message,
-    required this.time,
-    required this.isRead,
-  });
 }

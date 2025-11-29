@@ -16,11 +16,14 @@ class MainNavigationPage extends StatefulWidget {
 
 class _MainNavigationPageState extends State<MainNavigationPage> {
   int _currentIndex = 0;
+  bool _handledRouteArgs = false;
 
   // HomePage의 State에 접근하기 위한 GlobalKey
   final GlobalKey<State<HomePage>> _homePageKey = GlobalKey();
   // AcademyPage의 State에 접근하기 위한 GlobalKey
   final GlobalKey<State<AcademyPage>> _academyPageKey = GlobalKey();
+  // NotificationPage의 State에 접근하기 위한 GlobalKey
+  final GlobalKey<State<NotificationPage>> _notificationPageKey = GlobalKey();
 
   // 모든 탭 페이지들
   late final List<Widget> _pages = [
@@ -29,11 +32,12 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     const UploadImagesPage(),
     AcademyPage(key: _academyPageKey), // GlobalKey 전달
     const MyPage(),
-    const NotificationPage(),
+    NotificationPage(key: _notificationPageKey), // GlobalKey 전달
   ];
 
   @override
   Widget build(BuildContext context) {
+    _handleRouteArgumentsIfNeeded();
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: BottomNavigationWidget(
@@ -68,9 +72,52 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
               }
             }
           }
+
+          // 알림 탭(인덱스 5)으로 전환 시 새로고침
+          if (index == 5) {
+            final notificationState = _notificationPageKey.currentState;
+            // dynamic으로 캐스팅하여 refresh() 메서드 호출
+            if (notificationState != null) {
+              try {
+                (notificationState as dynamic).refresh();
+              } catch (e) {
+                // refresh() 메서드가 없는 경우 무시
+              }
+            }
+          }
         },
       ),
     );
+  }
+
+  void _handleRouteArgumentsIfNeeded() {
+    if (_handledRouteArgs) return;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args['targetDate'] is String) {
+      final targetDate = DateTime.tryParse(args['targetDate'] as String);
+      if (targetDate != null) {
+        _handledRouteArgs = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _navigateHomeAndFocus(targetDate);
+        });
+      }
+    }
+  }
+
+  void _navigateHomeAndFocus(DateTime date) {
+    setState(() {
+      _currentIndex = 0;
+    });
+    final homeState = _homePageKey.currentState;
+    if (homeState != null) {
+      try {
+        (homeState as dynamic).focusOnDate(date);
+      } catch (e) {
+        try {
+          (homeState as dynamic).refresh();
+        } catch (_) {}
+      }
+    }
   }
 }
 

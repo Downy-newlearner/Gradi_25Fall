@@ -1,6 +1,12 @@
+import 'dart:collection';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+
+import '../../services/upload_batch_service.dart';
+import '../../services/upload_sse_service.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_header_title.dart';
 import '../../widgets/app_header_menu_button.dart';
@@ -22,6 +28,86 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
   ProblemType? _selectedType;
   final ImagePicker _picker = ImagePicker();
 
+  final UploadSseService _sseService = UploadSseService();
+  final Queue<XFile> _pendingUploads = Queue<XFile>();
+
+  bool _isSseConnecting = false;
+  bool _isUploading = false;
+  String? _uploadError;
+  String? _uploadSuccessMessage;
+  int? _uploadedCount;
+  int? _totalCount;
+
+  @override
+  void initState() {
+    super.initState();
+    _connectSse();
+  }
+
+  @override
+  void dispose() {
+    _sseService.dispose();
+    super.dispose();
+  }
+
+  Future<void> _connectSse() async {
+    setState(() {
+      _isSseConnecting = true;
+    });
+    try {
+      await _sseService.connect();
+      _sseService.uploadUrlStream.listen(_onUploadUrlReceived);
+    } catch (e) {
+      debugPrint('SSE connect error: $e');
+      setState(() {
+        _uploadError = '실시간 업로드 채널 연결에 실패했습니다. 다시 시도해주세요.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSseConnecting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _onUploadUrlReceived(String url) async {
+    if (_pendingUploads.isEmpty) {
+      debugPrint('Upload URL received but no pending images. url=$url');
+      return;
+    }
+
+    final file = _pendingUploads.removeFirst();
+    try {
+      final bytes = await file.readAsBytes();
+      final response = await http.put(
+        Uri.parse(url),
+        headers: {
+          // 서버에서 별도 Content-Type 요구 시 확장자 기반으로 조정 가능
+          'Content-Type': 'image/jpeg',
+        },
+        body: bytes,
+      );
+
+      debugPrint('Uploaded ${file.path} → ${response.statusCode}');
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('이미지 업로드 실패 (${response.statusCode})');
+      }
+    } catch (e) {
+      setState(() {
+        _uploadError = '이미지 업로드 중 오류가 발생했습니다: $e';
+      });
+      debugPrint('Upload error: $e');
+    } finally {
+      if (_pendingUploads.isEmpty && mounted) {
+        setState(() {
+          _isUploading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _pickImages() async {
     final List<XFile> images = await _picker.pickMultiImage();
     if (!mounted) return;
@@ -31,7 +117,7 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
     });
   }
 
-  void _registerProblems() {
+  Future<void> _registerProblems() async {
     if (_selectedImages.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -46,15 +132,77 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
       return;
     }
 
-    // TODO: 채점 기능 구현 완료 후 API 호출 추가
-    // - 선택된 이미지들을 서버에 전송
-    // - 채점 결과를 받아서 EditGradingResultPage로 이동
+    if (_isSseConnecting) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('업로드 채널을 준비 중입니다. 잠시 후 다시 시도해주세요.')),
+      );
+      return;
+    }
 
-    Navigator.pushNamed(
-      context,
-      '/upload/edit-result',
-      arguments: {'images': _selectedImages, 'problemType': _selectedType},
-    );
+    setState(() {
+      _uploadError = null;
+      _uploadSuccessMessage = null;
+      _uploadedCount = 0;
+      _totalCount = _selectedImages.length;
+      _isUploading = true;
+    });
+
+    try {
+      debugPrint(
+        '[UploadImagesPage] 🚀 업로드 시작: ${_selectedImages.length}개 이미지',
+      );
+
+      // uploadImages 외부 함수 사용 (진행 상황 콜백 포함)
+      final response = await uploadImages(
+        images: _selectedImages,
+        onProgress: (uploadedCount, totalCount) {
+          debugPrint(
+            '[UploadImagesPage] 📤 업로드 진행: $uploadedCount/$totalCount',
+          );
+          if (mounted) {
+            setState(() {
+              _uploadedCount = uploadedCount;
+              _totalCount = totalCount;
+            });
+          }
+        },
+      );
+
+      debugPrint(
+        '[UploadImagesPage] ✅ 업로드 완료: studentResponseId=${response.studentResponseId}',
+      );
+
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _uploadedCount = _selectedImages.length;
+          _uploadSuccessMessage =
+              '${_selectedImages.length}개의 이미지가 성공적으로 업로드되었습니다.';
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_uploadSuccessMessage!),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[UploadImagesPage] ❌ 업로드 실패: $e');
+      if (mounted) {
+        setState(() {
+          _isUploading = false;
+          _uploadError = e.toString();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('문제 등록 요청에 실패했습니다: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -104,15 +252,59 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: const Color(0xFFE1E7ED)),
         ),
-        child: const Center(
-          child: Text(
-            '이미지를 선택해주세요',
-            style: TextStyle(
-              fontFamily: 'Pretendard',
-              fontWeight: FontWeight.w500,
-              fontSize: 14,
-              color: Color(0xFF7F818E),
-            ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '이미지를 선택해주세요',
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                  color: Color(0xFF7F818E),
+                ),
+              ),
+              if (_uploadError != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _uploadError!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                    color: Color(0xFFFF4258),
+                  ),
+                ),
+              ],
+              if (_uploadSuccessMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _uploadSuccessMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                    color: Color(0xFF4CAF50),
+                  ),
+                ),
+              ],
+              if (_isUploading && _totalCount != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '업로드 중: ${_uploadedCount ?? 0}/$_totalCount',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 12,
+                    color: Color(0xFFAC5BF8),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       );
@@ -215,7 +407,13 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
                 ),
                 child: Center(
                   child: Text(
-                    _selectedImages.isEmpty ? '이미지 가져오기' : '문제 등록',
+                    _selectedImages.isEmpty
+                        ? '이미지 가져오기'
+                        : (_isUploading
+                              ? (_uploadedCount != null && _totalCount != null
+                                    ? '업로드 중... ($_uploadedCount/$_totalCount)'
+                                    : '업로드 중...')
+                              : '문제 등록'),
                     style: const TextStyle(
                       fontFamily: 'Pretendard',
                       fontWeight: FontWeight.w700,
