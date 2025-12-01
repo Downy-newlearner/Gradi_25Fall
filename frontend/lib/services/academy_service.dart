@@ -2,9 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'dart:developer' as developer;
 import 'auth_service.dart';
 import '../config/api_config.dart';
+import '../utils/app_logger.dart';
 
 class AcademyService {
   static final AcademyService _instance = AcademyService._internal();
@@ -33,7 +33,6 @@ class AcademyService {
       // JWT 토큰 가져오기
       final token = await _authService.getAccessToken();
       if (token == null) {
-        developer.log('No access token available');
         throw Exception('인증 토큰이 없습니다. 로그인이 필요합니다.');
       }
 
@@ -42,8 +41,6 @@ class AcademyService {
         // '${ApiConfig.baseUrl}/academy/nearby?lat=$latitude&lng=$longitude',
         '${ApiConfig.baseUrl}/academy/nearby?lat=37.3215&lng=127.1234', // 테스트용 예시 좌표
       );
-
-      developer.log('Fetching nearby academies from: $uri');
 
       // API 호출
       final response = await http.get(
@@ -54,9 +51,6 @@ class AcademyService {
         },
       );
 
-      developer.log('Response status: ${response.statusCode}');
-      developer.log('Response body: ${response.body}');
-
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         return data.map((item) => AcademyResponse.fromJson(item)).toList();
@@ -66,7 +60,6 @@ class AcademyService {
         throw Exception('학원 정보를 가져오는데 실패했습니다: ${response.statusCode}');
       }
     } catch (e) {
-      developer.log('Error fetching nearby academies: $e');
       rethrow;
     }
   }
@@ -76,16 +69,11 @@ class AcademyService {
     try {
       final token = await _authService.getAccessToken();
       if (token == null) {
-        developer.log('No access token available');
         throw Exception('인증 토큰이 없습니다. 로그인이 필요합니다.');
       }
 
       final uri = Uri.parse(
         '${ApiConfig.baseUrl}/academy/academy-users/$userId/academies',
-      );
-      developer.log('🔵 [AcademyService] Fetching user academies from: $uri');
-      developer.log(
-        '🔵 [AcademyService] userId 타입: ${userId.runtimeType}, 값: $userId',
       );
 
       final response = await http.get(
@@ -96,40 +84,28 @@ class AcademyService {
         },
       );
 
-      developer.log('Response status: ${response.statusCode}');
-      developer.log('Response body: ${response.body}');
-
       if (response.statusCode == 200) {
         try {
           final List<dynamic> data = json.decode(response.body);
-          developer.log('✅ Parsed ${data.length} academies');
           return data.map((item) {
             try {
               return UserAcademyResponse.fromJson(item);
             } catch (e) {
-              developer.log('❌ Error parsing academy item: $e');
-              developer.log('❌ Item data: $item');
               rethrow;
             }
           }).toList();
         } catch (e) {
-          developer.log('❌ JSON parsing error: $e');
-          developer.log('❌ Response body: ${response.body}');
           throw Exception('학원 정보 파싱에 실패했습니다: $e');
         }
       } else if (response.statusCode == 404) {
         // 404는 빈 배열 반환 (학원이 없는 경우)
-        developer.log('⚠️ No academies found (404) - returning empty list');
         return [];
       } else if (response.statusCode == 401) {
         throw Exception('인증에 실패했습니다. 다시 로그인해주세요.');
       } else {
-        developer.log('❌ API Error: ${response.statusCode}');
-        developer.log('❌ Response body: ${response.body}');
         throw Exception('학원 정보를 가져오는데 실패했습니다: ${response.statusCode}');
       }
     } catch (e) {
-      developer.log('Error fetching user academies: $e');
       rethrow;
     }
   }
@@ -145,25 +121,17 @@ class AcademyService {
     try {
       final token = await _authService.getAccessToken();
       if (token == null) {
-        developer.log('No access token available');
         throw Exception('인증 토큰이 없습니다. 로그인이 필요합니다.');
       }
 
       final uri = Uri.parse(
         '${ApiConfig.baseUrl}/academy/academy-users/join/request',
       );
-      developer.log('Sending academy join request to: $uri');
 
       final requestBody = json.encode({
         'academy': {'academy_code': academy_id},
         'user_id': user_id,
       });
-
-      developer.log('Request body: $requestBody');
-      developer.log(
-        'academy_id type: ${academy_id.runtimeType}, value: $academy_id',
-      );
-      developer.log('user_id type: ${user_id.runtimeType}, value: $user_id');
 
       final response = await http.post(
         uri,
@@ -174,13 +142,9 @@ class AcademyService {
         body: requestBody,
       );
 
-      developer.log('Response status: ${response.statusCode}');
-      developer.log('Response body: ${response.body}');
-
       if (response.statusCode == 200 ||
           response.statusCode == 201 ||
           response.statusCode == 202) {
-        developer.log('Academy join request successful');
         // 성공 응답이므로 아무것도 반환하지 않음 (응답 body 파싱 불필요)
         return;
       } else if (response.statusCode == 401) {
@@ -188,8 +152,6 @@ class AcademyService {
       } else {
         // 에러 응답 처리 (응답 body가 JSON이 아닐 수 있으므로 안전하게 처리)
         String errorMessage = '학원 등록 요청에 실패했습니다: ${response.statusCode}';
-
-        developer.log('❌ user_id: $user_id (type: ${user_id.runtimeType})');
 
         // 요청 본문 정보를 에러 메시지에 포함
         String requestInfo = '\n전송된 데이터: $requestBody';
@@ -203,10 +165,8 @@ class AcademyService {
                 errorBody['detail'] ??
                 response.body;
             errorMessage = '$errorMessage\n서버 응답: $serverMessage$requestInfo';
-            developer.log('❌ Parsed error message: $serverMessage');
           } catch (e) {
             // JSON 파싱 실패 시 응답 body를 그대로 사용
-            developer.log('Failed to parse error response as JSON: $e');
             errorMessage = '$errorMessage\n서버 응답: ${response.body}$requestInfo';
           }
         } else {
@@ -216,7 +176,6 @@ class AcademyService {
         throw Exception(errorMessage);
       }
     } catch (e) {
-      developer.log('Error joining academy: $e');
       rethrow;
     }
   }
@@ -232,7 +191,6 @@ class AcademyService {
       final uri = Uri.parse(
         '${ApiConfig.baseUrl}/academy/academy-users/$academyUserId/leave',
       );
-      developer.log('🔴 [AcademyService] Leaving academy: $uri');
 
       final response = await http.delete(
         uri,
@@ -242,11 +200,7 @@ class AcademyService {
         },
       );
 
-      developer.log('Response status: ${response.statusCode}');
-      developer.log('Response body: ${response.body}');
-
       if (response.statusCode == 200 || response.statusCode == 202) {
-        developer.log('✅ 학원 탈퇴 요청 성공');
         await _removeAcademyFromCache(academyUserId);
         return;
       } else if (response.statusCode == 401) {
@@ -256,7 +210,6 @@ class AcademyService {
         throw Exception('학원 탈퇴 요청에 실패했습니다: $message');
       }
     } catch (e) {
-      developer.log('❌ 학원 탈퇴 요청 실패: $e');
       rethrow;
     }
   }
@@ -270,7 +223,6 @@ class AcademyService {
       final prefs = await SharedPreferences.getInstance();
       final userId = await _authService.getUserId();
       if (userId == null) {
-        developer.log('⚠️ 학원 목록 캐시 저장 실패: userId 없음');
         return;
       }
       final cacheKey = '${_academiesCacheKey}_$userId';
@@ -278,13 +230,12 @@ class AcademyService {
         academies.map((academy) => academy.toJson()).toList(),
       );
       await prefs.setString(cacheKey, jsonData);
-      developer.log('✅ 학원 목록 캐시 저장 완료 (${academies.length}개) - key: $cacheKey');
       // 구 버전 캐시 제거
       if (prefs.containsKey(_academiesCacheKey)) {
         await prefs.remove(_academiesCacheKey);
       }
     } catch (e) {
-      developer.log('❌ 학원 목록 캐시 저장 실패: $e');
+      // 캐시 저장 실패는 무시
     }
   }
 
@@ -294,7 +245,6 @@ class AcademyService {
       final prefs = await SharedPreferences.getInstance();
       final userId = await _authService.getUserId();
       if (userId == null) {
-        developer.log('⚠️ 학원 목록 캐시 로드 실패: userId 없음');
         return null;
       }
       final cacheKey = '${_academiesCacheKey}_$userId';
@@ -310,7 +260,6 @@ class AcademyService {
       final List<dynamic> data = json.decode(cachedJson);
       return data.map((item) => UserAcademyResponse.fromJson(item)).toList();
     } catch (e) {
-      developer.log('❌ 학원 목록 캐시 로드 실패: $e');
       return null;
     }
   }
@@ -321,15 +270,13 @@ class AcademyService {
       final prefs = await SharedPreferences.getInstance();
       final currentCode = prefs.getString(_defaultAcademyCodeKey);
       if (currentCode == academyCode) {
-        developer.log('ℹ️ 디폴트 학원 코드 동일 → 변경 생략');
         return;
       }
 
       await prefs.setString(_defaultAcademyCodeKey, academyCode);
-      developer.log('✅ 디폴트 학원 코드 저장 완료: $academyCode');
       defaultAcademyVersion.value++;
     } catch (e) {
-      developer.log('❌ 디폴트 학원 코드 저장 실패: $e');
+      // 캐시 저장 실패는 무시
     }
   }
 
@@ -339,7 +286,6 @@ class AcademyService {
       final prefs = await SharedPreferences.getInstance();
       return prefs.getString(_defaultAcademyCodeKey);
     } catch (e) {
-      developer.log('❌ 디폴트 학원 코드 로드 실패: $e');
       return null;
     }
   }
@@ -352,7 +298,6 @@ class AcademyService {
   /// 3. 없으면 null 반환
   String? selectDefaultAcademy(List<UserAcademyResponse> academies) {
     if (academies.isEmpty) {
-      developer.log('⚠️ 학원 목록이 비어있음');
       return null;
     }
 
@@ -362,7 +307,6 @@ class AcademyService {
         .toList();
 
     if (registeredAcademies.isEmpty) {
-      developer.log('⚠️ 등록완료된 학원이 없음');
       return null;
     }
 
@@ -374,13 +318,9 @@ class AcademyService {
     // 2. 등록완료된 첫 번째 학원 반환
     final firstRegistered = registeredAcademies.first;
     if (firstRegistered.academyCode != null) {
-      developer.log(
-        '✅ 디폴트 학원 선택: ${firstRegistered.academyName} (Code: ${firstRegistered.academyCode})',
-      );
       return firstRegistered.academyCode;
     }
 
-    developer.log('⚠️ 학원 코드가 없음');
     return null;
   }
 
@@ -392,7 +332,6 @@ class AcademyService {
     List<UserAcademyResponse> academies,
   ) async {
     if (academies.isEmpty) {
-      developer.log('⚠️ 학원 목록이 비어있음');
       return null;
     }
 
@@ -402,7 +341,6 @@ class AcademyService {
         .toList();
 
     if (registeredAcademies.isEmpty) {
-      developer.log('⚠️ 등록완료된 학원이 없음');
       return null;
     }
 
@@ -417,9 +355,6 @@ class AcademyService {
       );
 
       if (savedAcademy.academyCode != null) {
-        developer.log(
-          '✅ 저장된 디폴트 학원 사용: ${savedAcademy.academyName} (Code: ${savedAcademy.academyCode})',
-        );
         return savedAcademy.academyCode;
       }
     }
@@ -427,13 +362,9 @@ class AcademyService {
     // 2. 저장된 학원이 없거나 유효하지 않으면 등록완료된 첫 번째 학원 반환
     final firstRegistered = registeredAcademies.first;
     if (firstRegistered.academyCode != null) {
-      developer.log(
-        '✅ 첫 번째 등록완료 학원 선택: ${firstRegistered.academyName} (Code: ${firstRegistered.academyCode})',
-      );
       return firstRegistered.academyCode;
     }
 
-    developer.log('⚠️ 학원 코드가 없음');
     return null;
   }
 
@@ -449,7 +380,6 @@ class AcademyService {
         (academy) => academy.academyCode == academyCode,
       );
     } catch (e) {
-      developer.log('⚠️ 학원 코드 $academyCode에 해당하는 학원을 찾을 수 없음');
       return null;
     }
   }
@@ -480,12 +410,10 @@ class AcademyService {
       try {
         final token = await _authService.getAccessToken();
         if (token == null) {
-          developer.log('No access token available');
           throw Exception('인증 토큰이 없습니다. 로그인이 필요합니다.');
         }
 
         final uri = ApiConfig.getAcademyClassesUri(uncachedIds);
-        developer.log('Fetching classes from: $uri');
 
         final response = await http.get(
           uri,
@@ -494,9 +422,6 @@ class AcademyService {
             'Authorization': 'Bearer $token',
           },
         );
-
-        developer.log('Response status: ${response.statusCode}');
-        developer.log('Response body: ${response.body}');
 
         if (response.statusCode == 200) {
           final List<dynamic> data = json.decode(response.body);
@@ -510,22 +435,12 @@ class AcademyService {
               _classCache[academyUserId] = className;
             }
           }
-
-          developer.log('✅ Class names cached: ${_classCache.length} classes');
         } else if (response.statusCode == 401) {
           throw Exception('인증에 실패했습니다. 다시 로그인해주세요.');
         } else {
-          developer.log(
-            '⚠️ Failed to fetch class names: ${response.statusCode}',
-          );
           // API 실패 시 빈 맵 반환 (에러는 throw하지 않음)
         }
-      } catch (e, stackTrace) {
-        developer.log(
-          '⚠️ Error fetching classes: $e',
-          error: e,
-          stackTrace: stackTrace,
-        );
+      } catch (e) {
         // 에러 발생 시에도 캐시된 데이터는 반환
       }
     }
@@ -540,7 +455,65 @@ class AcademyService {
   /// 클래스 정보 캐시 초기화
   void clearClassCache() {
     _classCache.clear();
-    developer.log('✅ Class cache cleared');
+  }
+
+  /// 학원 코드로 학원 정보 및 스케줄 조회
+  Future<AcademyScheduleResponse> getAcademySchedule(String academyCode) async {
+    appLog('[academy:academy_service] API 호출 시작 - academyCode: $academyCode');
+
+    try {
+      // ensureValidAccessToken 사용 (다른 서비스와 일관성 유지)
+      final token = await _authService.ensureValidAccessToken();
+      if (token == null) {
+        appLog('[academy:academy_service] 인증 토큰 없음');
+        throw Exception('인증 토큰이 없습니다. 로그인이 필요합니다.');
+      }
+
+      final uri = Uri.parse(
+        '${ApiConfig.baseUrl}/academy/academy-schedules/$academyCode',
+      );
+
+      appLog('[academy:academy_service] GET 요청: $uri');
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      appLog('[academy:academy_service] 응답 상태 코드: ${response.statusCode}');
+      appLog('[academy:academy_service] 응답 본문: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        appLog('[academy:academy_service] 응답 파싱 성공');
+        appLog('[academy:academy_service] 파싱된 데이터: $data');
+
+        final result = AcademyScheduleResponse.fromJson(data);
+        appLog(
+          '[academy:academy_service] AcademyScheduleResponse 생성 완료 - academyName: ${result.academy.academyName}, schedules 개수: ${result.schedules.length}',
+        );
+
+        return result;
+      } else if (response.statusCode == 401) {
+        appLog('[academy:academy_service] 인증 실패 (401)');
+        throw Exception('인증에 실패했습니다. 다시 로그인해주세요.');
+      } else if (response.statusCode == 404) {
+        appLog('[academy:academy_service] 학원 정보 없음 (404)');
+        throw Exception('학원 정보를 찾을 수 없습니다.');
+      } else {
+        // 로그에는 상세 정보, 예외에는 일반 메시지
+        appLog(
+          '[academy:academy_service] API 호출 실패 - status: ${response.statusCode}',
+        );
+        throw Exception('학원 정보를 가져오지 못했습니다.');
+      }
+    } catch (e) {
+      appLog('[academy:academy_service] 에러 발생: $e');
+      rethrow;
+    }
   }
 
   Future<void> _removeAcademyFromCache(int academyUserId) async {
@@ -556,9 +529,44 @@ class AcademyService {
       final List<dynamic> data = json.decode(cachedJson);
       data.removeWhere((item) => item['academy_user_id'] == academyUserId);
       await prefs.setString(cacheKey, json.encode(data));
-      developer.log('✅ 캐시에서 학원 제거 완료: $academyUserId');
     } catch (e) {
-      developer.log('⚠️ 캐시 학원 제거 실패: $e');
+      // 캐시 제거 실패는 무시
+    }
+  }
+
+  /// 학원 이미지 리스트 조회
+  ///
+  /// [academyCode]: 학원 코드
+  /// 반환값: AcademyImageResponse (academy_code, academy_image_urls, main_image_url)
+  Future<AcademyImageResponse> getAcademyImages(String academyCode) async {
+    try {
+      final token = await _authService.ensureValidAccessToken();
+      if (token == null) {
+        throw Exception('인증 토큰이 없습니다. 로그인이 필요합니다.');
+      }
+
+      final uri = Uri.parse('${ApiConfig.baseUrl}/academy/images/$academyCode');
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        return AcademyImageResponse.fromJson(data);
+      } else if (response.statusCode == 401) {
+        throw Exception('인증에 실패했습니다. 다시 로그인해주세요.');
+      } else if (response.statusCode == 404) {
+        throw Exception('학원 이미지를 찾을 수 없습니다.');
+      } else {
+        throw Exception('학원 이미지를 가져오지 못했습니다.');
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 }
@@ -616,26 +624,12 @@ class UserAcademyResponse {
 
   factory UserAcademyResponse.fromJson(Map<String, dynamic> json) {
     try {
-      developer.log('🔵 [UserAcademyResponse] Parsing JSON: ${json.keys}');
-
       // academy 객체 추출 (null 안전)
       final academy = json['academy'] as Map<String, dynamic>? ?? {};
-      developer.log('🔵 [UserAcademyResponse] Academy object: ${academy.keys}');
 
       final academyName = academy['academy_name']?.toString() ?? '';
       final academyCode = academy['academy_code']?.toString();
       final registerStatus = json['register_status']?.toString() ?? 'P';
-
-      developer.log(
-        '🔵 [UserAcademyResponse] Parsed: name=$academyName, code=$academyCode, status=$registerStatus',
-      );
-
-      if (academyName.isEmpty) {
-        developer.log(
-          '⚠️ [UserAcademyResponse] Warning: academy_name is empty!',
-        );
-        developer.log('⚠️ [UserAcademyResponse] Full academy object: $academy');
-      }
 
       return UserAcademyResponse(
         // 추가 필드들 (snake_case)
@@ -652,8 +646,6 @@ class UserAcademyResponse {
         academyCode: academyCode,
       );
     } catch (e) {
-      developer.log('❌ [UserAcademyResponse] Error parsing: $e');
-      developer.log('❌ [UserAcademyResponse] JSON data: $json');
       rethrow;
     }
   }
@@ -671,5 +663,168 @@ class UserAcademyResponse {
       'registerStatus': registerStatus,
       'academyCode': academyCode,
     };
+  }
+}
+
+/// 학원 스케줄 API 응답 모델
+class AcademyScheduleResponse {
+  final AcademyInfo academy;
+  final List<Schedule> schedules;
+
+  AcademyScheduleResponse({required this.academy, required this.schedules});
+
+  factory AcademyScheduleResponse.fromJson(Map<String, dynamic> json) {
+    return AcademyScheduleResponse(
+      academy: AcademyInfo.fromJson(json['academy'] as Map<String, dynamic>),
+      schedules:
+          (json['schedules'] as List<dynamic>?)
+              ?.map((item) => Schedule.fromJson(item as Map<String, dynamic>))
+              .toList() ??
+          [],
+    );
+  }
+}
+
+/// 학원 정보 DTO (API 응답 전용)
+///
+/// 주의: AcademyData와 중복 가능성이 있습니다.
+/// 나중에 도메인 모델 통합을 고려해야 합니다.
+class AcademyInfo {
+  final String academyName;
+  final String academyCode;
+  final String academyDescription;
+  final String academyPhone;
+  final String academyEmail;
+  final String academyWebsite;
+  final String academyRoadAddress;
+  final String academyDetailAddress;
+  final double academyLatitude;
+  final double academyLongitude;
+
+  AcademyInfo({
+    required this.academyName,
+    required this.academyCode,
+    required this.academyDescription,
+    required this.academyPhone,
+    required this.academyEmail,
+    required this.academyWebsite,
+    required this.academyRoadAddress,
+    required this.academyDetailAddress,
+    required this.academyLatitude,
+    required this.academyLongitude,
+  });
+
+  factory AcademyInfo.fromJson(Map<String, dynamic> json) {
+    return AcademyInfo(
+      academyName: json['academy_name'] as String? ?? '',
+      academyCode: json['academy_code'] as String? ?? '',
+      academyDescription: json['academy_description'] as String? ?? '',
+      academyPhone: json['academy_phone'] as String? ?? '',
+      academyEmail: json['academy_email'] as String? ?? '',
+      academyWebsite: json['academy_website'] as String? ?? '',
+      academyRoadAddress: json['academy_road_address'] as String? ?? '',
+      academyDetailAddress: json['academy_detail_address'] as String? ?? '',
+      academyLatitude: (json['academy_latitude'] as num?)?.toDouble() ?? 0.0,
+      academyLongitude: (json['academy_longitude'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+/// 학원 스케줄 모델
+class Schedule {
+  final int id;
+  final String academyCode;
+  final int dayOfWeek; // 0=일요일, 1=월요일, ..., 6=토요일
+  final String startTime; // "HH:MM:SS"
+  final String endTime; // "HH:MM:SS"
+
+  Schedule({
+    required this.id,
+    required this.academyCode,
+    required this.dayOfWeek,
+    required this.startTime,
+    required this.endTime,
+  });
+
+  factory Schedule.fromJson(Map<String, dynamic> json) {
+    return Schedule(
+      id: json['id'] as int? ?? 0,
+      academyCode: json['academy_code'] as String? ?? '',
+      dayOfWeek: json['day_of_week'] as int? ?? 0,
+      startTime: json['start_time'] as String? ?? '',
+      endTime: json['end_time'] as String? ?? '',
+    );
+  }
+
+  /// dayOfWeek를 요일 이름으로 변환
+  ///
+  /// 범위 체크를 통해 0~6 외 값이 들어와도 안전하게 처리합니다.
+  String get dayName {
+    const days = ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
+    // 범위 체크: 0~6 외 값 방어
+    if (dayOfWeek < 0 || dayOfWeek > 6) {
+      return '알 수 없음';
+    }
+    return days[dayOfWeek];
+  }
+
+  /// 시간 포맷팅 (HH:MM:SS → HH:MM AM/PM)
+  ///
+  /// TODO: 나중에 시간 관련 로직이 복잡해지면 DateTime/TimeOfDay로 파싱 고려
+  /// TODO: 국제화 필요 시 intl 패키지 DateFormat 사용 고려
+  String get formattedStartTime {
+    return _formatTime(startTime);
+  }
+
+  String get formattedEndTime {
+    return _formatTime(endTime);
+  }
+
+  String _formatTime(String timeStr) {
+    if (timeStr.isEmpty) return '';
+    try {
+      final parts = timeStr.split(':');
+      if (parts.length >= 2) {
+        final hour = int.parse(parts[0]);
+        final minute = parts[1];
+        if (hour == 0) {
+          return '12:$minute AM';
+        } else if (hour < 12) {
+          return '$hour:$minute AM';
+        } else if (hour == 12) {
+          return '12:$minute PM';
+        } else {
+          return '${hour - 12}:$minute PM';
+        }
+      }
+    } catch (e) {
+      // 파싱 실패 시 원본 반환
+    }
+    return timeStr;
+  }
+}
+
+/// 학원 이미지 API 응답 모델
+class AcademyImageResponse {
+  final String academyCode;
+  final List<String> academyImageUrls;
+  final String? mainImageUrl;
+
+  AcademyImageResponse({
+    required this.academyCode,
+    required this.academyImageUrls,
+    this.mainImageUrl,
+  });
+
+  factory AcademyImageResponse.fromJson(Map<String, dynamic> json) {
+    return AcademyImageResponse(
+      academyCode: json['academy_code'] as String? ?? '',
+      academyImageUrls:
+          (json['academy_image_urls'] as List<dynamic>?)
+              ?.map((url) => url.toString())
+              .toList() ??
+          [],
+      mainImageUrl: json['main_image_url']?.toString(),
+    );
   }
 }

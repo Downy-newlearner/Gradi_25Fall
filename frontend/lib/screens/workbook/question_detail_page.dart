@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../widgets/back_button.dart';
 import 'chapter_detail_page.dart';
+import '../../domain/student_answer/student_answer_repository.dart';
+import '../../domain/student_answer/student_answer_query.dart';
+import '../../domain/section_image/get_section_image_use_case.dart';
+import '../../config/app_dependencies.dart';
+import '../../utils/app_logger.dart';
 
 /// 문제 상세 페이지
 /// ChapterDetailPage에서 문제를 선택하면 표시되는 페이지
@@ -13,47 +18,132 @@ import 'chapter_detail_page.dart';
 ///    - 채점 결과 (정답/오답)
 ///    - 학생 답안 이미지
 class QuestionDetailPage extends StatefulWidget {
+  final int chapterId;
+  final int academyUserId;
   final String workbookName;
   final String chapterName;
   final int questionNumber;
   final QuestionStatus status;
+  final StudentAnswerRepository studentAnswerRepository;
+  final GetSectionImageUseCase getSectionImageUseCase;
 
-  const QuestionDetailPage({
+  QuestionDetailPage({
     super.key,
+    required this.chapterId,
+    required this.academyUserId,
     required this.workbookName,
     required this.chapterName,
     required this.questionNumber,
     required this.status,
-  });
+    StudentAnswerRepository? studentAnswerRepository,
+    GetSectionImageUseCase? getSectionImageUseCase,
+  }) : studentAnswerRepository =
+           studentAnswerRepository ?? AppDependencies.studentAnswerRepository,
+       getSectionImageUseCase =
+           getSectionImageUseCase ?? AppDependencies.getSectionImageUseCase;
 
   @override
   State<QuestionDetailPage> createState() => _QuestionDetailPageState();
 }
 
 class _QuestionDetailPageState extends State<QuestionDetailPage> {
-  // TODO: 서버에서 문제 상세 데이터 가져오기
-  // 임시 데이터
-
-  /// Section 이미지 경로
-  /// TODO: 실제로는 서버에서 가져온 crop된 이미지 URL
-  String? _sectionImagePath;
+  /// Section 이미지 URL
+  String? _sectionImageUrl;
+  bool _isLoadingImage = false;
+  String? _imageError;
 
   /// 채점 히스토리 목록
-  /// TODO: 서버에서 가져오기
-  final List<GradingHistory> _gradingHistory = [
-    GradingHistory(
-      gradingDate: DateTime(2025, 10, 15, 14, 30),
-      isCorrect: false,
-      studentAnswerImagePath: null, // TODO: 실제 이미지 경로
-      feedback: '부호 계산 오류',
-    ),
-    GradingHistory(
-      gradingDate: DateTime(2025, 10, 16, 16, 45),
-      isCorrect: true,
-      studentAnswerImagePath: null, // TODO: 실제 이미지 경로
-      feedback: '정답! 잘했어요.',
-    ),
-  ];
+  /// TODO: 서버에서 가져오기 (나중에 구현)
+
+  final List<GradingHistory> _gradingHistory = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSectionImage();
+  }
+
+  /// Section 이미지 로드
+  ///
+  /// chapterId, academyUserId, questionNumber로 답안을 조회하여
+  /// studentResponseId를 찾고, 그것으로 이미지를 조회합니다.
+  Future<void> _loadSectionImage() async {
+    setState(() {
+      _isLoadingImage = true;
+      _imageError = null;
+    });
+
+    try {
+      // 1. 답안 조회하여 studentResponseId 찾기
+      final answers = await widget.studentAnswerRepository.getStudentAnswers(
+        StudentAnswerQuery.byChapter(
+          chapterId: widget.chapterId,
+          academyUserId: widget.academyUserId,
+        ),
+      );
+
+      // 2. 해당 문제 번호의 답안 찾기 (subQuestionNumber는 0 우선, 없으면 첫 번째)
+      final matchingAnswers = answers
+          .where((a) => a.questionNumber == widget.questionNumber)
+          .toList();
+
+      if (matchingAnswers.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _isLoadingImage = false;
+          _imageError = '답안 정보를 찾을 수 없습니다.';
+        });
+        return;
+      }
+
+      // subQuestionNumber가 0인 답안을 우선 선택, 없으면 첫 번째 답안
+      final answer = matchingAnswers.firstWhere(
+        (a) => a.subQuestionNumber == 0,
+        orElse: () => matchingAnswers.first,
+      );
+
+      if (!mounted) return;
+
+      // 3. 이미지 조회
+      // 답안의 questionNumber와 subQuestionNumber를 사용
+      // (답안이 실제로 저장된 문제 번호를 사용해야 함)
+      final imageQuestionNumber = answer.questionNumber;
+      final imageSubQuestionNumber = answer.subQuestionNumber;
+
+      appLog(
+        '[question_detail_page] 이미지 조회 시작 - questionNumber: $imageQuestionNumber, subQuestionNumber: $imageSubQuestionNumber, studentResponseId: ${answer.studentResponseId}',
+      );
+
+      final imageEntity = await widget.getSectionImageUseCase.call(
+        academyUserId: widget.academyUserId,
+        studentResponseId: answer.studentResponseId,
+        questionNumber: imageQuestionNumber,
+        subQuestionNumber: imageSubQuestionNumber,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _sectionImageUrl = imageEntity?.imageUrl;
+        _isLoadingImage = false;
+        if (imageEntity == null) {
+          _imageError = '이미지를 찾을 수 없습니다.';
+          appLog('[question_detail_page] 이미지 엔티티가 null입니다.');
+        } else {
+          appLog('[question_detail_page] 이미지 URL 설정됨: ${imageEntity.imageUrl}');
+        }
+      });
+    } catch (e) {
+      appLog('[question_detail_page] 이미지 로드 실패: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isLoadingImage = false;
+        _imageError = '이미지를 불러오지 못했습니다.';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -198,34 +288,81 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
             border: Border.all(color: const Color(0xFFE9ECEF)),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: _sectionImagePath != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    _sectionImagePath!,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return _buildPlaceholder();
-                    },
-                  ),
-                )
-              : _buildPlaceholder(),
+          child: _buildImageContent(),
         ),
       ],
     );
   }
 
-  Widget _buildPlaceholder() {
-    return const Center(
+  Widget _buildImageContent() {
+    // 로딩 중
+    if (_isLoadingImage) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // 에러 상태
+    if (_imageError != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.image_not_supported,
+              size: 48,
+              color: Color(0xFFCCCCCC),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _imageError!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                color: Color(0xFF999999),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 이미지 표시
+    if (_sectionImageUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          _sectionImageUrl!,
+          fit: BoxFit.contain,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return const Center(child: CircularProgressIndicator());
+          },
+          errorBuilder: (context, error, stackTrace) {
+            appLog('[question_detail_page] 이미지 로드 에러: $error');
+            appLog('[question_detail_page] 이미지 URL: $_sectionImageUrl');
+            appLog('[question_detail_page] StackTrace: $stackTrace');
+            return _buildPlaceholder('이미지를 불러오지 못했습니다.');
+          },
+        ),
+      );
+    }
+
+    // 이미지 없음
+    return _buildPlaceholder('이미지가 없습니다.');
+  }
+
+  Widget _buildPlaceholder([String? message]) {
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.image_outlined, size: 48, color: Color(0xFFCCCCCC)),
-          SizedBox(height: 8),
+          const Icon(Icons.image_outlined, size: 48, color: Color(0xFFCCCCCC)),
+          const SizedBox(height: 8),
           Text(
-            'Section 이미지\n(추후 구현 예정)',
+            message ?? '이미지가 없습니다.',
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               fontFamily: 'Pretendard',
               fontWeight: FontWeight.w500,
               fontSize: 14,

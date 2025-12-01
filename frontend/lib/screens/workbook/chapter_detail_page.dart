@@ -1,5 +1,15 @@
 import 'package:flutter/material.dart';
+import 'dart:developer' as developer;
 import '../../widgets/back_button.dart';
+import '../../services/get_chapter_question_statuses_use_case.dart';
+import '../../services/models/question_status_model.dart';
+
+/// 문제 풀이 상태 (UI 전용 enum, Domain에 없음)
+enum QuestionStatus {
+  correct, // isCorrect == true
+  incorrect, // isCorrect == false
+  unsolved, // isCorrect == null
+}
 
 /// 챕터 상세 페이지
 /// WorkbookDetailPage에서 챕터를 선택하면 표시되는 페이지
@@ -11,17 +21,19 @@ import '../../widgets/back_button.dart';
 ///    - 빨간색: 풀고 틀린 문제
 ///    - 회색: 풀지 않은 문제
 class ChapterDetailPage extends StatefulWidget {
+  final int chapterId;
+  final int academyUserId;
   final String workbookName;
   final String chapterName;
-  final int solvedCount;
-  final int totalCount;
+  final GetChapterQuestionStatusesUseCase getChapterQuestionStatusesUseCase;
 
   const ChapterDetailPage({
     super.key,
+    required this.chapterId,
+    required this.academyUserId,
     required this.workbookName,
     required this.chapterName,
-    required this.solvedCount,
-    required this.totalCount,
+    required this.getChapterQuestionStatusesUseCase,
   });
 
   @override
@@ -29,20 +41,71 @@ class ChapterDetailPage extends StatefulWidget {
 }
 
 class _ChapterDetailPageState extends State<ChapterDetailPage> {
-  // TODO: 서버에서 문제 데이터 가져오기
-  // 임시 데이터
-  final List<QuestionInfo> _questions = [
-    QuestionInfo(questionNumber: 1, status: QuestionStatus.correct),
-    QuestionInfo(questionNumber: 2, status: QuestionStatus.correct),
-    QuestionInfo(questionNumber: 3, status: QuestionStatus.incorrect),
-    QuestionInfo(questionNumber: 4, status: QuestionStatus.correct),
-    QuestionInfo(questionNumber: 5, status: QuestionStatus.unsolved),
-    QuestionInfo(questionNumber: 6, status: QuestionStatus.unsolved),
-    QuestionInfo(questionNumber: 7, status: QuestionStatus.incorrect),
-    QuestionInfo(questionNumber: 8, status: QuestionStatus.correct),
-    QuestionInfo(questionNumber: 9, status: QuestionStatus.unsolved),
-    QuestionInfo(questionNumber: 10, status: QuestionStatus.unsolved),
-  ];
+  List<QuestionStatusModel> _questionStatuses = [];
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadQuestionStatuses();
+  }
+
+  Future<void> _loadQuestionStatuses() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final statuses = await widget.getChapterQuestionStatusesUseCase.call(
+        chapterId: widget.chapterId,
+        academyUserId: widget.academyUserId,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _questionStatuses = statuses;
+        _isLoading = false;
+      });
+    } catch (e) {
+      developer.log('❌ [ChapterDetailPage] 문제 상태 로드 실패: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = '문제 정보를 불러오지 못했습니다.';
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// UI 정책: isCorrect? -> QuestionStatus 변환
+  QuestionStatus _getQuestionStatus(QuestionStatusModel model) {
+    final isCorrect = model.isCorrect;
+
+    if (isCorrect == null) {
+      return QuestionStatus.unsolved; // UI에서 판단
+    } else if (isCorrect) {
+      return QuestionStatus.correct;
+    } else {
+      return QuestionStatus.incorrect;
+    }
+  }
+
+  // 통계 계산 (UI 레이어에서 처리)
+  int _getCorrectCount() {
+    return _questionStatuses.where((model) => model.isCorrect == true).length;
+  }
+
+  int _getIncorrectCount() {
+    return _questionStatuses.where((model) => model.isCorrect == false).length;
+  }
+
+  int _getUnsolvedCount() {
+    return _questionStatuses.where((model) => model.isCorrect == null).length;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,27 +118,7 @@ class _ChapterDetailPageState extends State<ChapterDetailPage> {
             _buildHeader(),
 
             // 메인 콘텐츠
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 20),
-
-                    // 챕터 정보
-                    _buildChapterInfo(),
-
-                    const SizedBox(height: 24),
-
-                    // 문제 목록
-                    _buildQuestionGrid(),
-
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-            ),
+            Expanded(child: _buildContent()),
           ],
         ),
       ),
@@ -112,6 +155,96 @@ class _ChapterDetailPageState extends State<ChapterDetailPage> {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    // 로딩 상태
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40.0),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    // 에러 상태
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Color(0xFFFF6B6B),
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage!,
+                style: const TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                  color: Color(0xFFFF6B6B),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadQuestionStatuses,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6B6B),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('다시 시도'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 빈 상태
+    if (_questionStatuses.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Text(
+            '등록된 문제가 없습니다.',
+            style: const TextStyle(
+              fontFamily: 'Pretendard',
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              color: Color(0xFF999999),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // 정상 상태
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 20),
+
+          // 챕터 정보
+          _buildChapterInfo(),
+
+          const SizedBox(height: 24),
+
+          // 문제 목록
+          _buildQuestionGrid(),
+
+          const SizedBox(height: 20),
         ],
       ),
     );
@@ -184,19 +317,21 @@ class _ChapterDetailPageState extends State<ChapterDetailPage> {
         mainAxisSpacing: 12,
         childAspectRatio: 1,
       ),
-      itemCount: _questions.length,
+      itemCount: _questionStatuses.length,
       itemBuilder: (context, index) {
-        return _buildQuestionCard(_questions[index]);
+        final model = _questionStatuses[index];
+        final status = _getQuestionStatus(model);
+        return _buildQuestionCard(model.questionNumber, status);
       },
     );
   }
 
   /// 개별 문제 카드
-  Widget _buildQuestionCard(QuestionInfo question) {
+  Widget _buildQuestionCard(int questionNumber, QuestionStatus status) {
     Color backgroundColor;
     Color textColor;
 
-    switch (question.status) {
+    switch (status) {
       case QuestionStatus.correct:
         backgroundColor = const Color(0xFF4CAF50); // 초록색
         textColor = Colors.white;
@@ -218,10 +353,12 @@ class _ChapterDetailPageState extends State<ChapterDetailPage> {
           context,
           '/workbook/question-detail',
           arguments: {
+            'chapterId': widget.chapterId,
+            'academyUserId': widget.academyUserId,
             'workbookName': widget.workbookName,
             'chapterName': widget.chapterName,
-            'questionNumber': question.questionNumber,
-            'status': question.status,
+            'questionNumber': questionNumber,
+            'status': status,
           },
         );
       },
@@ -239,7 +376,7 @@ class _ChapterDetailPageState extends State<ChapterDetailPage> {
         ),
         child: Center(
           child: Text(
-            question.questionNumber.toString(),
+            questionNumber.toString(),
             style: TextStyle(
               fontFamily: 'Pretendard',
               fontWeight: FontWeight.w700,
@@ -251,32 +388,4 @@ class _ChapterDetailPageState extends State<ChapterDetailPage> {
       ),
     );
   }
-
-  // 통계 계산 헬퍼 메서드
-  int _getCorrectCount() {
-    return _questions.where((q) => q.status == QuestionStatus.correct).length;
-  }
-
-  int _getIncorrectCount() {
-    return _questions.where((q) => q.status == QuestionStatus.incorrect).length;
-  }
-
-  int _getUnsolvedCount() {
-    return _questions.where((q) => q.status == QuestionStatus.unsolved).length;
-  }
-}
-
-/// 문제 풀이 상태
-enum QuestionStatus {
-  correct, // 맞음
-  incorrect, // 틀림
-  unsolved, // 안 풀음
-}
-
-/// 문제 정보 모델
-class QuestionInfo {
-  final int questionNumber;
-  final QuestionStatus status;
-
-  QuestionInfo({required this.questionNumber, required this.status});
 }

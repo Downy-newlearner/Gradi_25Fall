@@ -3,7 +3,6 @@ import 'dart:io';
 import '../../widgets/back_button.dart';
 import '../../services/location_service.dart';
 import '../../services/academy_service.dart';
-import 'dart:developer' as developer;
 
 class AcademyListPage extends StatefulWidget {
   const AcademyListPage({super.key});
@@ -85,7 +84,6 @@ class _AcademyListPageState extends State<AcademyListPage> {
         _isLoading = false;
       });
     } catch (e) {
-      developer.log('Error fetching nearby academies: $e');
       setState(() {
         _isLoading = false;
         _errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -372,19 +370,7 @@ class _AcademyListPageState extends State<AcademyListPage> {
         child: Row(
           children: [
             // 학원 썸네일
-            Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.25,
-                minWidth: 80,
-                maxHeight: MediaQuery.of(context).size.width * 0.25,
-                minHeight: 80,
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFF666666),
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: const Icon(Icons.school, color: Colors.white, size: 40),
-            ),
+            _buildAcademyThumbnail(academy),
 
             Container(width: MediaQuery.of(context).size.width * 0.04),
 
@@ -439,6 +425,67 @@ class _AcademyListPageState extends State<AcademyListPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAcademyThumbnail(AcademyData academy) {
+    return FutureBuilder<String?>(
+      future: academy.academyCode != null
+          ? _academyService
+                .getAcademyImages(academy.academyCode!)
+                .then((response) => response.mainImageUrl)
+                .catchError((e) {
+                  return null;
+                })
+          : Future.value(null),
+      builder: (context, snapshot) {
+        final imageUrl = snapshot.data;
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+
+        return Container(
+          width: MediaQuery.of(context).size.width * 0.25,
+          height: MediaQuery.of(context).size.width * 0.25,
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.25,
+            minWidth: 80,
+            maxHeight: MediaQuery.of(context).size.width * 0.25,
+            minHeight: 80,
+          ),
+          decoration: BoxDecoration(
+            color: const Color(0xFF666666),
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: isLoading
+              ? const Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                )
+              : imageUrl != null && imageUrl.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.school,
+                        color: Colors.white,
+                        size: 40,
+                      );
+                    },
+                  ),
+                )
+              : const Icon(Icons.school, color: Colors.white, size: 40),
+        );
+      },
     );
   }
 }

@@ -6,6 +6,10 @@ import '../widgets/continuous_learning_widget_v2.dart';
 import '../services/assessment_repository.dart';
 import '../services/academy_service.dart';
 import '../services/auth_service.dart';
+import '../services/get_monthly_learning_status_use_case_impl.dart';
+import '../services/learning_completion_service_impl.dart';
+import '../services/grading_history_repository_impl.dart';
+import '../domain/learning/get_monthly_learning_status_use_case.dart';
 import '../models/assessment.dart';
 import '../utils/academy_utils.dart';
 import 'dart:developer' as developer;
@@ -39,6 +43,14 @@ class _HomePageState extends State<HomePage> {
   final Map<String, List<Assessment>> _dateAssessments = {};
   DateTime _selectedDate = DateTime.now();
   bool _isLoadingAssessments = false;
+
+  // UseCase 인스턴스 (한 번만 생성)
+  // 필드 초기화에서 생성하여 initState 전에 접근 가능하도록 보장
+  final GetMonthlyLearningStatusUseCase _monthlyStatusUseCase = GetMonthlyLearningStatusUseCaseImpl(
+    assessmentRepository: AssessmentRepository(),
+    gradingHistoryRepository: GradingHistoryRepositoryImpl(),
+    completionService: const LearningCompletionServiceImpl(),
+  );
 
   // 숙제 완료 상태 관리 (UI 상태용)
   final Map<String, bool> _homeworkStatus = {};
@@ -492,11 +504,14 @@ class _HomePageState extends State<HomePage> {
               SizedBox(height: screenHeight * 0.0297), // 26px → 2.97%
               ContinuousLearningWidgetV2(
                 consecutiveDays: _getConsecutiveDays(),
-                completedDates: _getCompletedDates(),
                 homeworkDeadlines: _getHomeworkDeadlines(),
-                dateAssessments: _dateAssessments,
                 onDateSelected: _onDateSelected,
                 selectedDate: _selectedDate,
+                // 새 구조: UseCase 사용
+                monthlyStatusUseCase: _monthlyStatusUseCase,
+                // 하위 호환성 (추후 제거 예정)
+                completedDates: _getCompletedDates(),
+                dateAssessments: _dateAssessments,
               ),
               SizedBox(height: screenHeight * 0.0297), // 26px → 2.97%
               _buildTodayHomeworkSection(),
@@ -562,6 +577,7 @@ class _HomePageState extends State<HomePage> {
     final canShowDropdown = _registeredAcademies.length > 1;
 
     return AppHeader(
+      titleAlignment: 'left',
       title: canShowDropdown
           ? PopupMenuButton<String>(
               child: Row(
@@ -647,7 +663,6 @@ class _HomePageState extends State<HomePage> {
                   color: const Color(0xFF333333),
                   size: iconSize,
                 ),
-                const Spacer(), // 왼쪽 정렬을 위해 오른쪽을 밀기
               ],
             ),
       trailing: const AppHeaderMenuButton(),

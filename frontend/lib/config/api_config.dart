@@ -21,9 +21,8 @@ class ApiConfig {
   static const String resetPasswordEndpoint = '/users/reset-password';
   static const String changeResetPasswordEndpoint = '/change/reset_password';
   static const String signOutEndpoint = '/sign-out';
-  static const String uploadStreamEndpoint = '/storage/storage/upload-stream';
-  static const String uploadUrlBatchEndpoint =
-      '/storage/storage/upload-url/batch';
+  static const String uploadStreamEndpoint = '/storage/upload-stream';
+  static const String uploadUrlBatchEndpoint = '/storage/upload-url/batch';
 
   // 인증 코드 발송
   static const String sendCodeSignUpEndpoint = '/send-code/sign_up';
@@ -61,8 +60,7 @@ class ApiConfig {
   static Uri getChangeResetPasswordUri() =>
       Uri.parse('$baseUrl$changeResetPasswordEndpoint');
   static Uri getSignOutUri() => Uri.parse('$baseUrl$signOutEndpoint');
-  static Uri getUploadStreamUri() =>
-      Uri.parse('$baseUrl$uploadStreamEndpoint');
+  static Uri getUploadStreamUri() => Uri.parse('$baseUrl$uploadStreamEndpoint');
   static Uri getUploadUrlBatchUri() =>
       Uri.parse('$baseUrl$uploadUrlBatchEndpoint');
 

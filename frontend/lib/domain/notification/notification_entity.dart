@@ -1,5 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:convert';
 import 'notification_type.dart';
+import '../../utils/app_logger.dart';
 
 /// 알림 엔티티 (도메인 모델)
 class NotificationEntity {
@@ -70,27 +72,48 @@ class NotificationEntity {
 
   /// FCM RemoteMessage에서 생성
   factory NotificationEntity.fromRemoteMessage(RemoteMessage message) {
+    appLog('[notification:notification_entity] fromRemoteMessage 호출');
+    appLog(
+      '[notification:notification_entity] 메시지 data: ${json.encode(message.data)}',
+    );
+    if (message.notification != null) {
+      appLog(
+        '[notification:notification_entity] notification.title: ${message.notification!.title}',
+      );
+      appLog(
+        '[notification:notification_entity] notification.body: ${message.notification!.body}',
+      );
+    }
+    appLog(
+      '[notification:notification_entity] 전체 메시지 JSON: ${json.encode({
+        'messageId': message.messageId,
+        'data': message.data,
+        'notification': message.notification != null ? {'title': message.notification!.title, 'body': message.notification!.body} : null,
+        'sentTime': message.sentTime?.toIso8601String(),
+      })}',
+    );
+
     final data = message.data;
     final notification = message.notification;
 
     // ID 생성: messageId 우선, 없으면 data['notificationId'], 없으면 timestamp 기반
-    final id = message.messageId ??
+    final id =
+        message.messageId ??
         data['notificationId'] ??
         'fcm_${DateTime.now().millisecondsSinceEpoch}';
 
-    // 타입 추출: data['type'] 우선, 없으면 기본값
+    // 제목 추출: data['title'] 우선, 없으면 notification.title, 없으면 기본값
+    final title = data['title'] as String? ?? notification?.title ?? '알림';
+
+    // 타입 추출: data['type'] 우선, 없으면 title 기반으로 판단, 없으면 기본값
     final typeString = data['type'] as String?;
     final type = typeString != null
         ? NotificationTypeUtil.fromString(typeString)
-        : NotificationType.learningReminder;
-
-    // 제목 추출: data['title'] 우선, 없으면 notification.title, 없으면 기본값
-    final title = data['title'] as String? ??
-        notification?.title ??
-        '알림';
+        : NotificationTypeUtil.fromTitle(title);
 
     // 메시지 추출: data['message'] 우선, 없으면 notification.body, 없으면 기본값
-    final messageText = data['message'] as String? ??
+    final messageText =
+        data['message'] as String? ??
         data['body'] as String? ??
         notification?.body ??
         '';
@@ -109,4 +132,3 @@ class NotificationEntity {
     );
   }
 }
-

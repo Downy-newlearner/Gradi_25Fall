@@ -21,8 +21,12 @@ import '../screens/academy/academy_list_page.dart';
 import '../screens/academy/academy_detail_page.dart';
 import '../screens/workbook/workbook_page.dart';
 import '../screens/workbook/workbook_detail_page.dart';
+import '../config/app_dependencies.dart';
 import '../screens/workbook/chapter_detail_page.dart';
 import '../screens/workbook/question_detail_page.dart';
+
+// QuestionStatus enum을 사용하기 위해 chapter_detail_page import
+// (QuestionStatus는 chapter_detail_page.dart에 정의되어 있음)
 import '../screens/mypage/mypage.dart';
 import '../screens/mypage/display_settings_page.dart';
 import '../screens/mypage/homework_status_page.dart';
@@ -32,10 +36,14 @@ import '../screens/mypage/academy_management_page.dart';
 import '../screens/mypage/notification_settings_page.dart';
 import '../screens/notification/notification_page.dart';
 import '../screens/upload/upload_images_page.dart';
-import '../screens/upload/edit_grading_result_page.dart';
+import '../screens/grading_history/edit_grading_result_page.dart';
 import '../screens/continuous_learning_detail_page.dart';
 import '../screens/loading_page.dart';
 import '../screens/problem_solution_temp_page.dart';
+import '../services/get_monthly_learning_status_use_case_impl.dart';
+import '../services/learning_completion_service_impl.dart';
+import '../services/assessment_repository.dart';
+import '../services/grading_history_repository_impl.dart';
 
 class AppRoutes {
   static const String mainNavigation = '/';
@@ -154,10 +162,29 @@ class AppRoutes {
         if (args == null) {
           return null;
         }
+
+        final bookId = args['bookId'] as int?;
+        final academyUserId = args['academyUserId'] as int?;
+
+        if (bookId == null || academyUserId == null) {
+          // 필수 파라미터가 없으면 에러 처리
+          return MaterialPageRoute(
+            builder: (context) => const Scaffold(
+              body: Center(child: Text('문제집 정보가 올바르지 않습니다.')),
+            ),
+          );
+        }
+
+        // AppDependencies에서 UseCase 가져오기
+        final getChaptersUseCase = AppDependencies.getChaptersForBookUseCase;
+
         return MaterialPageRoute(
           builder: (context) => WorkbookDetailPage(
             workbookName: args['workbookName'] as String,
-            thumbnailPath: args['thumbnailPath'] as String,
+            thumbnailPath: args['thumbnailPath'] as String?,
+            bookId: bookId,
+            academyUserId: academyUserId,
+            getChaptersUseCase: getChaptersUseCase,
           ),
         );
       case chapterDetail:
@@ -165,35 +192,120 @@ class AppRoutes {
         if (args == null) {
           return null;
         }
+
+        final chapterId = args['chapterId'] as int?;
+        final academyUserId = args['academyUserId'] as int?;
+
+        if (chapterId == null || academyUserId == null) {
+          return MaterialPageRoute(
+            builder: (context) => const Scaffold(
+              body: Center(child: Text('챕터 정보가 올바르지 않습니다.')),
+            ),
+          );
+        }
+
+        // AppDependencies에서 UseCase 가져오기
+        final getChapterQuestionStatusesUseCase =
+            AppDependencies.getChapterQuestionStatusesUseCase;
+
         return MaterialPageRoute(
           builder: (context) => ChapterDetailPage(
+            chapterId: chapterId,
+            academyUserId: academyUserId,
             workbookName: args['workbookName'] as String,
             chapterName: args['chapterName'] as String,
-            solvedCount: args['solvedCount'] as int,
-            totalCount: args['totalCount'] as int,
+            getChapterQuestionStatusesUseCase: getChapterQuestionStatusesUseCase,
           ),
         );
       case questionDetail:
         final args = settings.arguments as Map<String, dynamic>?;
         if (args == null) {
-          return null;
+          return MaterialPageRoute(
+            builder: (context) => const Scaffold(
+              body: Center(child: Text('문제 정보가 올바르지 않습니다.')),
+            ),
+          );
         }
+
+        final chapterId = args['chapterId'] as int?;
+        final academyUserId = args['academyUserId'] as int?;
+        final workbookName = args['workbookName'] as String?;
+        final chapterName = args['chapterName'] as String?;
+        final questionNumber = args['questionNumber'] as int?;
+        final status = args['status'] as QuestionStatus?;
+
+        if (chapterId == null ||
+            academyUserId == null ||
+            workbookName == null ||
+            chapterName == null ||
+            questionNumber == null ||
+            status == null) {
+          return MaterialPageRoute(
+            builder: (context) => const Scaffold(
+              body: Center(child: Text('문제 정보가 올바르지 않습니다.')),
+            ),
+          );
+        }
+
         return MaterialPageRoute(
           builder: (context) => QuestionDetailPage(
-            workbookName: args['workbookName'] as String,
-            chapterName: args['chapterName'] as String,
-            questionNumber: args['questionNumber'] as int,
-            status: args['status'] as QuestionStatus,
+            chapterId: chapterId,
+            academyUserId: academyUserId,
+            workbookName: workbookName,
+            chapterName: chapterName,
+            questionNumber: questionNumber,
+            status: status,
           ),
         );
       case editGradingResult:
+        final args = settings.arguments as Map<String, dynamic>?;
+        if (args == null ||
+            args['studentResponseId'] == null ||
+            args['academyUserId'] == null) {
+          // studentResponseId 또는 academyUserId가 없으면 에러 처리
+          return MaterialPageRoute(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: Text(
+                  args == null || args['studentResponseId'] == null
+                      ? '학생 응답 ID가 필요합니다.'
+                      : '학원 사용자 ID가 필요합니다.',
+                ),
+              ),
+            ),
+            settings: settings,
+          );
+        }
+
+        // AppDependencies에서 UseCase 가져오기
+        final getStudentAnswersUseCase =
+            AppDependencies.getStudentAnswersForResponseUseCase;
+        final updateStudentAnswersUseCase =
+            AppDependencies.updateStudentAnswersUseCase;
+        final getSectionImageUseCase =
+            AppDependencies.getSectionImageUseCase;
+
         return MaterialPageRoute(
-          builder: (context) => const EditGradingResultPage(),
+          builder: (context) => EditGradingResultPage(
+            studentResponseId: args['studentResponseId'] as int,
+            academyUserId: args['academyUserId'] as int,
+            getStudentAnswersUseCase: getStudentAnswersUseCase,
+            updateStudentAnswersUseCase: updateStudentAnswersUseCase,
+            getSectionImageUseCase: getSectionImageUseCase,
+          ),
           settings: settings,
         );
       case continuousLearningDetail:
+        // UseCase 생성 및 주입
+        final useCase = GetMonthlyLearningStatusUseCaseImpl(
+          assessmentRepository: AssessmentRepository(),
+          gradingHistoryRepository: GradingHistoryRepositoryImpl(),
+          completionService: const LearningCompletionServiceImpl(),
+        );
         return MaterialPageRoute(
-          builder: (context) => const ContinuousLearningDetailPage(),
+          builder: (context) => ContinuousLearningDetailPage(
+            monthlyStatusUseCase: useCase,
+          ),
           settings: settings,
         );
       default:

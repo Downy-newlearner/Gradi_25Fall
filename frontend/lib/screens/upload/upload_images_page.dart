@@ -10,6 +10,7 @@ import '../../services/upload_sse_service.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_header_title.dart';
 import '../../widgets/app_header_menu_button.dart';
+import '../../routes/app_routes.dart';
 
 enum ProblemType {
   newProblem, // 새로 풀기
@@ -117,6 +118,77 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
     });
   }
 
+  /// 문제 등록 성공 다이얼로그 표시
+  Future<void> _showSuccessDialog() async {
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // 배경 탭으로 닫기 방지
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            '문제 등록 완료',
+            style: TextStyle(
+              fontFamily: 'Pretendard',
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              color: Color(0xFF333333),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          content: const Text(
+            '문제 등록이 완료되었습니다. 채점이 완료되면 알림으로 알려드릴게요!',
+            style: TextStyle(
+              fontFamily: 'Pretendard',
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              color: Color(0xFF666666),
+              height: 1.5,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          actions: [
+            Center(
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(); // 다이얼로그 닫기
+                    Navigator.of(context).pushNamedAndRemoveUntil(
+                      AppRoutes.mainNavigation,
+                      (route) => false, // 모든 이전 라우트 제거
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFAC5BF8),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    '네, 알겠어요.',
+                    style: TextStyle(
+                      fontFamily: 'Pretendard',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _registerProblems() async {
     if (_selectedImages.isEmpty) {
       ScaffoldMessenger.of(
@@ -176,17 +248,10 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
         setState(() {
           _isUploading = false;
           _uploadedCount = _selectedImages.length;
-          _uploadSuccessMessage =
-              '${_selectedImages.length}개의 이미지가 성공적으로 업로드되었습니다.';
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_uploadSuccessMessage!),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        // 성공 팝업 표시
+        _showSuccessDialog();
       }
     } catch (e) {
       debugPrint('[UploadImagesPage] ❌ 업로드 실패: $e');

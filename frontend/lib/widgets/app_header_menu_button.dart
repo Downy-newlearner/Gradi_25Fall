@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../screens/grading_history/grading_history_page.dart';
 
-/// 헤더 메뉴 버튼 표준 위젯
+/// 헤더 채점 히스토리 버튼 위젯
 class AppHeaderMenuButton extends StatelessWidget {
   final VoidCallback? onPressed;
 
@@ -13,16 +14,17 @@ class AppHeaderMenuButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       icon: const Icon(
-        Icons.menu,
+        Icons.history,
         color: Color(0xFF333333),
       ), // ✅ Rule 5: trailing comma
       onPressed:
           onPressed ??
           () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('메뉴 기능 구현 예정'),
-              ), // ✅ Rule 5: trailing comma
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const GradingHistoryPage(),
+              ),
             );
           },
       padding: EdgeInsets.zero,

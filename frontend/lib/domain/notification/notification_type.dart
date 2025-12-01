@@ -47,4 +47,29 @@ class NotificationTypeUtil {
         return NotificationType.learningReminder; // 기본값
     }
   }
+
+  /// 제목(title)에서 NotificationType으로 변환
+  static NotificationType fromTitle(String title) {
+    final lowerTitle = title.toLowerCase();
+
+    // 우선순위: 더 구체적인 키워드부터 확인
+    if (lowerTitle.contains('채점') || lowerTitle.contains('해설')) {
+      return NotificationType.grading;
+    }
+    if (lowerTitle.contains('숙제')) {
+      return NotificationType.homework;
+    }
+    if (lowerTitle.contains('목표 달성')) {
+      return NotificationType.achievement;
+    }
+    if (lowerTitle.contains('리마인더')) {
+      return NotificationType.learningReminder;
+    }
+    if (lowerTitle.contains('학원') || lowerTitle.contains('공지사항')) {
+      return NotificationType.academyNotice;
+    }
+
+    // 기본값
+    return NotificationType.learningReminder;
+  }
 }

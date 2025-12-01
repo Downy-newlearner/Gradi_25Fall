@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
-import '../../widgets/continuous_learning_widget_v2.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_header_title.dart';
 import '../../widgets/app_header_menu_button.dart';
+import '../../services/academy_service.dart';
+import '../../services/auth_service.dart';
+import '../../services/workbook_repository_impl.dart';
+import '../../services/workbook_use_case.dart';
+import 'models/class_data.dart';
+import 'models/workbook_info.dart';
+import 'models/workbook_data.dart';
+import 'dart:developer' as developer;
 
 enum WorkbookViewType {
   byClass, // 클래스 순
@@ -19,110 +26,104 @@ class WorkbookPage extends StatefulWidget {
 class _WorkbookPageState extends State<WorkbookPage> {
   WorkbookViewType _currentView = WorkbookViewType.byClass;
 
-  // TODO: Fetch data from server
-  // 클래스 순 데이터
-  final List<ClassData> _classData = [
-    ClassData(
-      className: '오세종 선생님 3반',
-      lastStudyDate: '2025.10.09',
-      workbooks: [
-        WorkbookInfo(
-          name: '블랙라벨 중등수학 1-1',
-          lastStudyDate: '2025.10.09',
-          progress: 65,
-          thumbnailPath: 'assets/images/bookcovers/BookCover_Blacklabel.png',
-        ),
-        WorkbookInfo(
-          name: '라이트쎈 중등수학 1-1',
-          lastStudyDate: '2025.10.06',
-          progress: 40,
-          thumbnailPath: 'assets/images/bookcovers/BookCover_LightSsen.png',
-        ),
-      ],
-    ),
-    ClassData(
-      className: '조성재 선생님 1반',
-      lastStudyDate: '2025.10.07',
-      workbooks: [
-        WorkbookInfo(
-          name: '100발 100중 중등수학 2-2',
-          lastStudyDate: '2025.10.07',
-          progress: 55,
-          thumbnailPath: 'assets/images/bookcovers/BookCover_100to100.png',
-        ),
-      ],
-    ),
-    ClassData(
-      className: '최상일 선생님 2반',
-      lastStudyDate: '2025.10.05',
-      workbooks: [
-        WorkbookInfo(
-          name: '수능완성 영어 2026',
-          lastStudyDate: '2025.10.05',
-          progress: 75,
-          thumbnailPath: 'assets/images/bookcovers/workbook_2026.jpg',
-        ),
-        WorkbookInfo(
-          name: '수능완성 영어 2025',
-          lastStudyDate: '2025.10.03',
-          progress: 90,
-          thumbnailPath: 'assets/images/bookcovers/workbook_2025.jpg',
-        ),
-        WorkbookInfo(
-          name: '수능완성 영어 2024',
-          lastStudyDate: '2025.10.01',
-          progress: 100,
-          thumbnailPath: 'assets/images/bookcovers/workbook_2024.jpg',
-        ),
-      ],
-    ),
-  ];
+  // Services
+  final AuthService _authService = AuthService();
+  final AcademyService _academyService = AcademyService();
+  final WorkbookRepositoryImpl _workbookRepository = WorkbookRepositoryImpl();
+  final WorkbookUseCase _workbookUseCase = WorkbookUseCase();
 
-  // 문제집 순 데이터 (모든 문제집을 마지막 학습일 순으로 정렬)
-  final List<WorkbookData> _workbookData = [
-    WorkbookData(
-      workbookName: '블랙라벨 중등수학 1-1',
-      lastStudyDate: '2025.10.09',
-      progress: 65,
-      thumbnailPath: 'assets/images/bookcovers/BookCover_Blacklabel.png',
-      className: '오세종 선생님 3반',
-    ),
-    WorkbookData(
-      workbookName: '100발 100중 중등수학 2-2',
-      lastStudyDate: '2025.10.07',
-      progress: 55,
-      thumbnailPath: 'assets/images/bookcovers/BookCover_100to100.png',
-      className: '조성재 선생님 1반',
-    ),
-    WorkbookData(
-      workbookName: '라이트쎈 중등수학 1-1',
-      lastStudyDate: '2025.10.06',
-      progress: 40,
-      thumbnailPath: 'assets/images/bookcovers/BookCover_LightSsen.png',
-      className: '오세종 선생님 3반',
-    ),
-    WorkbookData(
-      workbookName: '수능완성 영어 2026',
-      lastStudyDate: '2025.10.05',
-      progress: 75,
-      thumbnailPath: 'assets/images/bookcovers/workbook_2026.jpg',
-      className: '최상일 선생님 2반',
-    ),
-    WorkbookData(
-      workbookName: '수능완성 영어 2025',
-      lastStudyDate: '2025.10.03',
-      progress: 90,
-      thumbnailPath: 'assets/images/bookcovers/workbook_2025.jpg',
-      className: '최상일 선생님 2반',
-    ),
-    WorkbookData(
-      workbookName: '수능완성 영어 2024',
-      lastStudyDate: '2025.10.01',
-      progress: 100,
-      thumbnailPath: 'assets/images/bookcovers/workbook_2024.jpg',
-      className: '최상일 선생님 2반',
-    ),
-  ];
+  // Data
+  List<ClassData> _classData = [];
+  List<WorkbookData> _workbookData = [];
+  bool _isLoading = false;
+  String? _errorMessage;
+  bool _hasLoadedOnce = false;
+  bool _hasRefreshedOnReturn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWorkbooks();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 다른 페이지에서 돌아올 때 강제 새로고침
+    if (!_hasRefreshedOnReturn) {
+      _hasRefreshedOnReturn = true;
+      _loadWorkbooks(forceRefresh: true);
+    }
+  }
+
+  /// 외부에서 호출 가능한 새로고침 메서드
+  void refresh() {
+    developer.log('🔄 [WorkbookPage] refresh() called from external');
+    _hasRefreshedOnReturn = false;
+    _loadWorkbooks(forceRefresh: true);
+  }
+
+  /// 문제집 데이터 로드
+  Future<void> _loadWorkbooks({bool forceRefresh = false}) async {
+    if (_hasLoadedOnce && !forceRefresh) {
+      return; // 메모리 캐시 사용
+    }
+
+    if (forceRefresh) {
+      _hasLoadedOnce = false;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // 1. UserId로 academyUserIds 조회
+      final userId = await _authService.getUserId();
+      if (userId == null) {
+        throw Exception('사용자 정보를 가져올 수 없습니다.');
+      }
+
+      final academies = await _academyService.getUserAcademies(userId);
+      final academyUserIds = academies
+          .where((a) => a.registerStatus == 'Y')
+          .map((a) => a.academy_user_id)
+          .whereType<int>()
+          .toList();
+
+      if (academyUserIds.isEmpty) {
+        setState(() {
+          _classData = [];
+          _workbookData = [];
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // 2. Repository 호출 (className은 Repository 내부에서 처리)
+      final summariesMap = await _workbookRepository
+          .getWorkbookSummariesByAcademyUserIds(academyUserIds);
+
+      // 3. UseCase로 UI 모델 변환
+      final classData = _workbookUseCase.convertToClassData(summariesMap);
+      final workbookData = _workbookUseCase.convertToWorkbookData(summariesMap);
+
+      // 4. UI 업데이트
+      setState(() {
+        _classData = classData;
+        _workbookData = workbookData;
+        _isLoading = false;
+        _hasLoadedOnce = true;
+      });
+    } catch (e) {
+      developer.log('❌ [WorkbookPage] 데이터 로드 실패: $e');
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -147,13 +148,6 @@ class _WorkbookPageState extends State<WorkbookPage> {
                       height: MediaQuery.of(context).size.height * 0.032,
                     ),
 
-                    // 주간 캘린더
-                    _buildWeeklyCalendar(),
-
-                    Container(
-                      height: MediaQuery.of(context).size.height * 0.01,
-                    ),
-
                     // 토글 버튼
                     _buildToggle(),
 
@@ -162,7 +156,16 @@ class _WorkbookPageState extends State<WorkbookPage> {
                     ),
 
                     // 메인 콘텐츠
-                    _currentView == WorkbookViewType.byClass
+                    _isLoading
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(40.0),
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
+                        : _errorMessage != null
+                        ? _buildErrorState()
+                        : _currentView == WorkbookViewType.byClass
                         ? _buildClassView()
                         : _buildWorkbookView(),
                   ],
@@ -182,27 +185,37 @@ class _WorkbookPageState extends State<WorkbookPage> {
     );
   }
 
-  Widget _buildWeeklyCalendar() {
-    // TODO: DB에서 실제 연속 학습 일수, 완료한 날짜, 숙제 마감일 조회
-    final Set<String> completedDates = {
-      '2025-10-22',
-      '2025-10-23',
-      '2025-10-24',
-      '2025-10-25',
-      '2025-10-26',
-      '2025-10-27',
-    };
-
-    final Set<String> homeworkDeadlines = {
-      '2025-10-22',
-      '2025-10-25',
-      '2025-10-26',
-    };
-
-    return ContinuousLearningWidgetV2(
-      consecutiveDays: 2,
-      completedDates: completedDates,
-      homeworkDeadlines: homeworkDeadlines,
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Color(0xFFFF6B6B), size: 48),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage ?? '오류가 발생했습니다.',
+              style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                color: Color(0xFFFF6B6B),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () => _loadWorkbooks(forceRefresh: true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B6B),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('다시 시도'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -269,6 +282,10 @@ class _WorkbookPageState extends State<WorkbookPage> {
   }
 
   Widget _buildClassView() {
+    if (_classData.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -279,7 +296,8 @@ class _WorkbookPageState extends State<WorkbookPage> {
           separatorBuilder: (context, index) =>
               Container(height: MediaQuery.of(context).size.height * 0.02),
           itemBuilder: (context, index) {
-            return _buildClassCard(_classData[index]);
+            final classItem = _classData[index];
+            return _buildClassCard(classItem);
           },
         ),
       ],
@@ -318,21 +336,23 @@ class _WorkbookPageState extends State<WorkbookPage> {
           Container(height: MediaQuery.of(context).size.height * 0.02),
 
           // 문제집 썸네일과 진행률 리스트
-          Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: List.generate(
-              classData.workbooks.length,
-              (index) => Padding(
-                padding: EdgeInsets.only(
-                  right: index < classData.workbooks.length - 1
-                      ? MediaQuery.of(context).size.width * 0.04
-                      : 0,
+          classData.workbooks.isEmpty
+              ? const SizedBox.shrink()
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: List.generate(classData.workbooks.length, (index) {
+                    final workbook = classData.workbooks[index];
+                    return Padding(
+                      padding: EdgeInsets.only(
+                        right: index < classData.workbooks.length - 1
+                            ? MediaQuery.of(context).size.width * 0.04
+                            : 0,
+                      ),
+                      child: _buildWorkbookProgress(workbook),
+                    );
+                  }),
                 ),
-                child: _buildWorkbookProgress(classData.workbooks[index]),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -345,6 +365,10 @@ class _WorkbookPageState extends State<WorkbookPage> {
 
     return GestureDetector(
       onTap: () {
+        if (workbook.bookId == null) {
+          // bookId가 없으면 이동하지 않음
+          return;
+        }
         // WorkbookDetailPage로 이동
         Navigator.pushNamed(
           context,
@@ -352,6 +376,8 @@ class _WorkbookPageState extends State<WorkbookPage> {
           arguments: {
             'workbookName': workbook.name,
             'thumbnailPath': workbook.thumbnailPath,
+            'bookId': workbook.bookId,
+            'academyUserId': workbook.academyUserId,
           },
         );
       },
@@ -365,15 +391,7 @@ class _WorkbookPageState extends State<WorkbookPage> {
               width: thumbnailWidth,
               height: thumbnailHeight,
               color: const Color(0xFFE9ECEF),
-              child: Image.asset(
-                workbook.thumbnailPath,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Center(
-                    child: Icon(Icons.book, color: Color(0xFF999999)),
-                  );
-                },
-              ),
+              child: _buildThumbnailImage(workbook.thumbnailPath),
             ),
           ),
           Container(height: MediaQuery.of(context).size.height * 0.01),
@@ -427,6 +445,10 @@ class _WorkbookPageState extends State<WorkbookPage> {
   Widget _buildWorkbookCard(WorkbookData workbookData) {
     return GestureDetector(
       onTap: () {
+        if (workbookData.bookId == null) {
+          // bookId가 없으면 이동하지 않음
+          return;
+        }
         // WorkbookDetailPage로 이동
         Navigator.pushNamed(
           context,
@@ -434,6 +456,8 @@ class _WorkbookPageState extends State<WorkbookPage> {
           arguments: {
             'workbookName': workbookData.workbookName,
             'thumbnailPath': workbookData.thumbnailPath,
+            'bookId': workbookData.bookId,
+            'academyUserId': workbookData.academyUserId,
           },
         );
       },
@@ -465,23 +489,7 @@ class _WorkbookPageState extends State<WorkbookPage> {
                   minHeight: 80,
                 ),
                 color: const Color(0xFFE74C3C),
-                child: Image.asset(
-                  workbookData.thumbnailPath,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return const Center(
-                      child: Text(
-                        'blacklabel',
-                        style: TextStyle(
-                          fontFamily: 'Pretendard',
-                          fontWeight: FontWeight.w700,
-                          fontSize: 10,
-                          color: Colors.white,
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                child: _buildThumbnailImage(workbookData.thumbnailPath),
               ),
             ),
 
@@ -570,49 +578,32 @@ class _WorkbookPageState extends State<WorkbookPage> {
       ),
     );
   }
-}
 
-// 클래스 데이터 모델
-class ClassData {
-  final String className;
-  final String lastStudyDate;
-  final List<WorkbookInfo> workbooks;
-
-  ClassData({
-    required this.className,
-    required this.lastStudyDate,
-    required this.workbooks,
-  });
-}
-
-// 문제집 정보 모델 (클래스 내부용)
-class WorkbookInfo {
-  final String name;
-  final String lastStudyDate;
-  final int progress;
-  final String thumbnailPath;
-
-  WorkbookInfo({
-    required this.name,
-    required this.lastStudyDate,
-    required this.progress,
-    required this.thumbnailPath,
-  });
-}
-
-// 문제집 데이터 모델 (문제집 순 페이지용)
-class WorkbookData {
-  final String workbookName;
-  final String lastStudyDate;
-  final int progress;
-  final String thumbnailPath;
-  final String className;
-
-  WorkbookData({
-    required this.workbookName,
-    required this.lastStudyDate,
-    required this.progress,
-    required this.thumbnailPath,
-    required this.className,
-  });
+  /// 썸네일 이미지 로드 분기 처리
+  ///
+  /// 네트워크 URL인 경우 Image.network 사용,
+  /// asset 경로인 경우 Image.asset 사용
+  Widget _buildThumbnailImage(String thumbnailPath) {
+    if (thumbnailPath.startsWith('http')) {
+      return Image.network(
+        thumbnailPath,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return const Center(
+            child: Icon(Icons.book, color: Color(0xFF999999)),
+          );
+        },
+      );
+    } else {
+      return Image.asset(
+        thumbnailPath,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          return const Center(
+            child: Icon(Icons.book, color: Color(0xFF999999)),
+          );
+        },
+      );
+    }
+  }
 }

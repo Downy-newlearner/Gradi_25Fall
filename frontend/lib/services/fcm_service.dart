@@ -10,6 +10,7 @@ import '../domain/notification/notification_entity.dart';
 import '../domain/notification/notification_repository.dart';
 import '../data/notification/notification_local_data_source.dart';
 import '../data/notification/notification_repository_impl.dart';
+import '../utils/app_logger.dart';
 
 class FCMService {
   static final FCMService _instance = FCMService._internal();
@@ -169,6 +170,23 @@ class FCMService {
 
   /// 포그라운드 메시지 처리
   void _handleForegroundMessage(RemoteMessage message) async {
+    appLog('[notification:fcm_service] 포그라운드 메시지 수신 - messageId: ${message.messageId}');
+    appLog('[notification:fcm_service] 메시지 data: ${json.encode(message.data)}');
+    if (message.notification != null) {
+      appLog('[notification:fcm_service] notification.title: ${message.notification!.title}');
+      appLog('[notification:fcm_service] notification.body: ${message.notification!.body}');
+    }
+    appLog('[notification:fcm_service] sentTime: ${message.sentTime}');
+    appLog('[notification:fcm_service] 전체 메시지 JSON: ${json.encode({
+      'messageId': message.messageId,
+      'data': message.data,
+      'notification': message.notification != null ? {
+        'title': message.notification!.title,
+        'body': message.notification!.body,
+      } : null,
+      'sentTime': message.sentTime?.toIso8601String(),
+    })}');
+    
     developer.log('포그라운드 메시지 수신: ${message.messageId}');
 
     // 알림 표시
@@ -213,6 +231,22 @@ class FCMService {
 
   /// 알림 탭 처리
   void _handleNotificationTap(RemoteMessage message) {
+    appLog('[notification:fcm_service] 알림 탭됨 - messageId: ${message.messageId}');
+    appLog('[notification:fcm_service] 메시지 data: ${json.encode(message.data)}');
+    if (message.notification != null) {
+      appLog('[notification:fcm_service] notification.title: ${message.notification!.title}');
+      appLog('[notification:fcm_service] notification.body: ${message.notification!.body}');
+    }
+    appLog('[notification:fcm_service] 전체 메시지 JSON: ${json.encode({
+      'messageId': message.messageId,
+      'data': message.data,
+      'notification': message.notification != null ? {
+        'title': message.notification!.title,
+        'body': message.notification!.body,
+      } : null,
+      'sentTime': message.sentTime?.toIso8601String(),
+    })}');
+    
     developer.log('알림 탭됨: ${message.messageId}');
 
     // TODO: 알림 타입에 따라 페이지 이동
@@ -292,6 +326,24 @@ Future<NotificationRepository> _buildNotificationRepositoryForBackground() async
 /// 백그라운드 메시지 핸들러 (최상위 함수여야 함)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // appLog는 최상위 함수에서도 사용 가능
+  appLog('[notification:fcm_service] 백그라운드 메시지 수신 - messageId: ${message.messageId}');
+  appLog('[notification:fcm_service] 메시지 data: ${json.encode(message.data)}');
+  if (message.notification != null) {
+    appLog('[notification:fcm_service] notification.title: ${message.notification!.title}');
+    appLog('[notification:fcm_service] notification.body: ${message.notification!.body}');
+  }
+  appLog('[notification:fcm_service] sentTime: ${message.sentTime}');
+  appLog('[notification:fcm_service] 전체 메시지 JSON: ${json.encode({
+    'messageId': message.messageId,
+    'data': message.data,
+    'notification': message.notification != null ? {
+      'title': message.notification!.title,
+      'body': message.notification!.body,
+    } : null,
+    'sentTime': message.sentTime?.toIso8601String(),
+  })}');
+  
   developer.log('백그라운드 메시지 수신: ${message.messageId}');
   
   try {

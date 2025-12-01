@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:developer' as developer;
 import '../../widgets/app_header.dart';
 import '../../widgets/app_header_title.dart';
 import '../../widgets/app_header_menu_button.dart';
@@ -47,7 +46,6 @@ class _AcademyPageState extends State<AcademyPage> {
   /// 외부에서 호출 가능한 새로고침 메서드
   /// 탭 전환 시 MainNavigationPage에서 호출
   void refresh() {
-    developer.log('🔄 [AcademyPage] refresh() called from external');
     _hasRefreshedOnReturn = false; // 플래그 리셋
     _loadAcademies(forceRefresh: true);
   }
@@ -61,7 +59,6 @@ class _AcademyPageState extends State<AcademyPage> {
 
     if (_hasLoadedOnce && !forceRefresh) {
       // 같은 세션 내 재진입: 메모리 캐시 사용
-      developer.log('Using memory cache (already loaded in this session)');
       return;
     }
 
@@ -89,25 +86,13 @@ class _AcademyPageState extends State<AcademyPage> {
         // 개발 환경에서 SSL 인증서 검증 우회 (프로덕션에서는 제거)
         HttpOverrides.global = MyHttpOverrides();
 
-        developer.log('🔵 [AcademyPage] getUserAcademies 호출, userId: $userId');
         try {
           final academies = await _academyService.getUserAcademies(userId);
-          developer.log('🔵 [AcademyPage] API에서 ${academies.length}개 학원 받음');
-
-          // 각 학원 정보 로깅
-          for (var academy in academies) {
-            developer.log(
-              '🔵 [AcademyPage] Academy: name=${academy.academyName}, status=${academy.registerStatus}, code=${academy.academyCode}',
-            );
-          }
 
           // API 응답을 AcademyItem으로 변환 (에러 처리 개선)
           final academyItems = <AcademyItem>[];
           for (var academy in academies) {
             try {
-              if (academy.academyName.isEmpty) {
-                developer.log('⚠️ [AcademyPage] Warning: Empty academy name!');
-              }
               final item = AcademyItem(
                 name: academy.academyName,
                 distance: '', // API 응답에 거리 정보가 없으므로 빈 문자열
@@ -118,15 +103,9 @@ class _AcademyPageState extends State<AcademyPage> {
               );
               academyItems.add(item);
             } catch (e) {
-              developer.log('❌ [AcademyPage] Error creating AcademyItem: $e');
-              developer.log('❌ [AcademyPage] Academy data: $academy');
               // 에러가 발생해도 계속 진행
             }
           }
-
-          developer.log(
-            '🔵 [AcademyPage] ${academyItems.length}개 AcademyItem 생성됨',
-          );
 
           // 메모리 및 SharedPreferences에 저장
           setState(() {
@@ -137,11 +116,7 @@ class _AcademyPageState extends State<AcademyPage> {
           });
 
           await _saveToCache(academyItems, cacheKey);
-          developer.log(
-            '✅ [AcademyPage] Loaded ${academyItems.length} academies from API and cached',
-          );
         } catch (e) {
-          developer.log('❌ [AcademyPage] Error loading academies: $e');
           setState(() {
             _isLoading = false;
             _errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -157,18 +132,15 @@ class _AcademyPageState extends State<AcademyPage> {
             _hasLoadedOnce = true;
             _isLoading = false;
           });
-          developer.log('Loaded ${cachedData.length} academies from cache');
         } else {
           // 캐시가 없으면 빈 상태 표시
           setState(() {
             _registeredAcademies.clear();
             _isLoading = false;
           });
-          developer.log('No cached academies found');
         }
       }
     } catch (e) {
-      developer.log('Error loading academies: $e');
       setState(() {
         _isLoading = false;
         _errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -191,7 +163,6 @@ class _AcademyPageState extends State<AcademyPage> {
       final List<dynamic> data = json.decode(cachedJson);
       return data.map((item) => AcademyItem.fromJson(item)).toList();
     } catch (e) {
-      developer.log('Error loading cache: $e');
       return [];
     }
   }
@@ -210,9 +181,8 @@ class _AcademyPageState extends State<AcademyPage> {
       if (prefs.containsKey(_cacheKeyBase)) {
         await prefs.remove(_cacheKeyBase);
       }
-      developer.log('Cache saved successfully');
     } catch (e) {
-      developer.log('Error saving cache: $e');
+      // 캐시 저장 실패는 무시
     }
   }
 
@@ -346,9 +316,6 @@ class _AcademyPageState extends State<AcademyPage> {
             final result = await Navigator.pushNamed(context, '/academy/list');
             // 등록 성공 시 캐시 갱신
             if (result == true) {
-              developer.log(
-                'Academy registration successful, refreshing cache...',
-              );
               await _loadAcademies(forceRefresh: true);
             }
           },
@@ -392,9 +359,6 @@ class _AcademyPageState extends State<AcademyPage> {
             final result = await Navigator.pushNamed(context, '/academy/list');
             // 등록 성공 시 캐시 갱신
             if (result == true) {
-              developer.log(
-                'Academy registration successful, refreshing cache...',
-              );
               await _loadAcademies(forceRefresh: true);
             }
           },
@@ -433,9 +397,6 @@ class _AcademyPageState extends State<AcademyPage> {
                   await _academyService.saveDefaultAcademyCode(
                     academy.academyCode!,
                   );
-                  developer.log(
-                    '✅ 디폴트 학원 저장 완료: ${academy.name} (Code: ${academy.academyCode})',
-                  );
 
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -459,15 +420,7 @@ class _AcademyPageState extends State<AcademyPage> {
           child: Row(
             children: [
               // 학원 썸네일
-              Container(
-                width: 97,
-                height: 97,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE1E7ED),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: const Icon(Icons.school, color: Colors.white, size: 40),
-              ),
+              _buildAcademyThumbnail(academy),
 
               const SizedBox(width: 15),
 
@@ -550,6 +503,61 @@ class _AcademyPageState extends State<AcademyPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAcademyThumbnail(AcademyItem academy) {
+    return FutureBuilder<String?>(
+      future: academy.academyCode != null
+          ? _academyService
+                .getAcademyImages(academy.academyCode!)
+                .then((response) => response.mainImageUrl)
+                .catchError((e) {
+                  return null;
+                })
+          : Future.value(null),
+      builder: (context, snapshot) {
+        final imageUrl = snapshot.data;
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+
+        return Container(
+          width: 97,
+          height: 97,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE1E7ED),
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: isLoading
+              ? const Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                )
+              : imageUrl != null && imageUrl.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    width: 97,
+                    height: 97,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.school,
+                        color: Colors.white,
+                        size: 40,
+                      );
+                    },
+                  ),
+                )
+              : const Icon(Icons.school, color: Colors.white, size: 40),
+        );
+      },
     );
   }
 }
