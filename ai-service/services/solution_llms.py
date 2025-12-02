@@ -114,15 +114,29 @@ page_number, problem_number, korean_content, english_content, script, answer_opt
 """
 
 
+def safe_int(value, default=0) -> int:
+    """
+    문자열이나 숫자를 안전하게 정수로 변환
+    "01" -> 1, "102" -> 102, 1 -> 1
+    """
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def load_answers(answer_file: str = "DB/answer.txt") -> dict:
     """
     정답 파일(answer.txt)을 로드하여 딕셔너리로 반환
+    키는 (페이지번호 int, 문제번호 int) 튜플로 저장
     
     Args:
         answer_file (str): 정답 파일 경로
     
     Returns:
-        dict: {(페이지, 문제번호): 정답} 형태의 딕셔너리
+        dict: {(페이지 int, 문제번호 int): 정답} 형태의 딕셔너리
     """
     mapping = {}
     
@@ -136,8 +150,11 @@ def load_answers(answer_file: str = "DB/answer.txt") -> dict:
                 continue
             parts = [x.strip() for x in line.split(",")]
             if len(parts) >= 3:
-                page, num, ans = parts[0], parts[1], parts[2]
-                mapping[(page, num)] = ans
+                page_str, num_str, ans = parts[0], parts[1], parts[2]
+                # 문자열을 정수로 변환하여 저장 ("88", "01", "1") -> (88, 1, "1")
+                page_int = safe_int(page_str)
+                num_int = safe_int(num_str)
+                mapping[(page_int, num_int)] = ans
     return mapping
 
 
@@ -184,7 +201,7 @@ def generate_explanation(
     
     Args:
         page_number (int or str): 페이지 번호 (예: 102)
-        problem_number (int or str): 문제 번호 (예: 40)
+        problem_number (int or str): 문제 번호 (예: 40 또는 1)
         user_answer (int or str): 사용자가 선택한 답안 번호 (예: 5)
         answer_file (str): 정답 파일 경로
         problems_folder (str): 문제 JSON 폴더 경로
@@ -198,36 +215,33 @@ def generate_explanation(
     problems = load_problems(problems_folder)
     real_answers = load_answers(answer_file)
     
-    # 입력값을 문자열로 변환
-    page = str(page_number)
-    num = str(problem_number).zfill(2)  # 문제번호를 2자리로 zero-padding
+    # 입력값을 정수로 변환 (백엔드에서 int로 전달되므로)
+    page_int = safe_int(page_number)
+    num_int = safe_int(problem_number)
     user_ans = str(user_answer)
     
-    # 해당 문제 검색
+    # 해당 문제 검색 (정수 비교)
     target = None
     for prob in problems:
-        prob_page = str(prob.get("page_number", ""))
-        prob_num = int(prob.get("problem_number", 0))
+        prob_page = safe_int(prob.get("page_number", ""))
+        prob_num = safe_int(prob.get("problem_number", 0))
         
-        if prob_page == page and prob_num == int(num):
+        if prob_page == page_int and prob_num == num_int:
             target = prob.copy()
             break
     
     if not target:
-        return f"해당 문제를 찾을 수 없습니다. (페이지: {page}, 문제번호: {num})"
+        return f"해당 문제를 찾을 수 없습니다. (페이지: {page_int}, 문제번호: {num_int})"
     
-    # 실제 정답 가져오기
-    real_ans = real_answers.get((page, num))
-    if not real_ans:
-        # num이 zero-padding 없이 저장되어 있을 수 있음
-        real_ans = real_answers.get((page, str(int(num))))
+    # 실제 정답 가져오기 (정수 튜플로 조회)
+    real_ans = real_answers.get((page_int, num_int))
     
     if not real_ans:
-        return f"해당 문제의 정답을 찾을 수 없습니다. (페이지: {page}, 문제번호: {num})"
+        return f"해당 문제의 정답을 찾을 수 없습니다. (페이지: {page_int}, 문제번호: {num_int})"
     
     # 정답인 경우 해설 생성 스킵
     if str(user_ans) == str(real_ans):
-        return f"정답입니다! (문제 {num}, 페이지 {page})"
+        return f"정답입니다! (문제 {num_int}, 페이지 {page_int})"
     
     # 문제 데이터에 정답과 사용자 답안 추가
     target["answer"] = real_ans

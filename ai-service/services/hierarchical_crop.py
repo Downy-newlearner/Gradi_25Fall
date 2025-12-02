@@ -85,6 +85,30 @@ class HierarchicalCropPipeline:
         if self.answer_key:
             logger.info(f"  - 답지 로드 완료: {len(self.answer_key)}개 페이지")
     
+    def _normalize_number(self, number_str: Optional[str]) -> Optional[str]:
+        """
+        숫자 문자열 정규화: 앞의 0 제거 (01 -> 1, 001 -> 1)
+        
+        Args:
+            number_str: OCR로 인식된 숫자 문자열
+            
+        Returns:
+            정규화된 숫자 문자열
+        """
+        if number_str is None:
+            return None
+        
+        number_str = number_str.strip()
+        
+        if not number_str:
+            return None
+        
+        # 숫자로만 이루어진 경우 앞의 0 제거
+        if number_str.isdigit():
+            return str(int(number_str))  # "01" -> "1", "001" -> "1"
+        
+        return number_str
+    
     def _load_answer_key(self, answer_key_path: str) -> Dict[str, List[Dict]]:
         """답지 파일 로드
         
@@ -104,8 +128,8 @@ class HierarchicalCropPipeline:
                     
                     parts = [p.strip() for p in line.split(',')]
                     if len(parts) >= 3:
-                        page_num = parts[0]
-                        problem_num = parts[1]
+                        page_num = self._normalize_number(parts[0])
+                        problem_num = self._normalize_number(parts[1])
                         answer = parts[2]
                         
                         if page_num not in answer_key:
@@ -135,13 +159,13 @@ class HierarchicalCropPipeline:
             logger.warning("페이지 번호를 인식하지 못했습니다. 건너뜁니다.")
             return False
         
-        page_number_normalized = str(page_number).strip()
+        page_number_normalized = self._normalize_number(page_number)
         is_valid = page_number_normalized in self.answer_key
         
         if not is_valid:
-            logger.warning(f"페이지 {page_number}는 답지에 없습니다. 건너뜁니다.")
+            logger.warning(f"페이지 {page_number_normalized}는 답지에 없습니다. 건너뜁니다.")
         else:
-            logger.info(f"페이지 {page_number}는 답지에 있습니다. 처리를 계속합니다.")
+            logger.info(f"페이지 {page_number_normalized}는 답지에 있습니다. 처리를 계속합니다.")
         
         return is_valid
     
@@ -151,19 +175,21 @@ class HierarchicalCropPipeline:
         if self.answer_key is None or page_number is None:
             return None
         
-        page_number_normalized = str(page_number).strip()
+        page_number_normalized = self._normalize_number(page_number)
         
         if page_number_normalized not in self.answer_key:
             return None
         
         expected_problems = {item['problem'] for item in self.answer_key[page_number_normalized]}
-        missing = expected_problems - recognized_numbers
+        # recognized_numbers도 정규화하여 비교
+        recognized_normalized = {self._normalize_number(n) for n in recognized_numbers if n}
+        missing = expected_problems - recognized_normalized
         
         if not missing:
             return None
         
         try:
-            missing_sorted = sorted(missing, key=lambda x: int(x) if x.isdigit() else float('inf'))
+            missing_sorted = sorted(missing, key=lambda x: int(x) if x and x.isdigit() else float('inf'))
             smallest_missing = missing_sorted[0]
             logger.info(f"📋 누락된 문제 번호 중 가장 작은 값: {smallest_missing}")
             return smallest_missing
@@ -247,6 +273,8 @@ class HierarchicalCropPipeline:
         with tempfile.NamedTemporaryFile(suffix='.jpg', delete=True) as tmp:
             cv2.imwrite(tmp.name, cropped)
             recognized_number = self.ocr.extract_number(tmp.name)
+            # 앞의 0 제거
+            recognized_number = self._normalize_number(recognized_number)
         
         return None, recognized_number
     
@@ -405,6 +433,8 @@ class HierarchicalCropPipeline:
                     with tempfile.NamedTemporaryFile(suffix='.jpg', delete=True) as tmp:
                         cv2.imwrite(tmp.name, cropped)
                         problem_ocr = self.ocr.extract_number(tmp.name)
+                        # 앞의 0 제거 (01 -> 1, 001 -> 1)
+                        problem_ocr = self._normalize_number(problem_ocr)
         else:
             logger.warning(f"Section {section_idx}: 문제번호 미검출")
         
@@ -582,7 +612,7 @@ class HierarchicalCropPipeline:
         # 정답 여부 판단
         correction = None
         if self.answer_key and page_number_ocr and problem_ocr and best_answer:
-            page_number_normalized = str(page_number_ocr).strip()
+            page_number_normalized = self._normalize_number(page_number_ocr)
             if page_number_normalized in self.answer_key:
                 for item in self.answer_key[page_number_normalized]:
                     if item['problem'] == problem_ocr:
@@ -695,6 +725,8 @@ class HierarchicalCropPipeline:
                     with tempfile.NamedTemporaryFile(suffix='.jpg', delete=True) as tmp:
                         cv2.imwrite(tmp.name, cropped)
                         problem_ocr = self.ocr.extract_number(tmp.name)
+                        # 앞의 0 제거
+                        problem_ocr = self._normalize_number(problem_ocr)
                 else:
                     problem_ocr = None
             else:
