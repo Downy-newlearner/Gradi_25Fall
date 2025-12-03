@@ -95,6 +95,7 @@ class ExplanationRequest(BaseModel):
     user_id: int
     page_number: int
     question_number: int
+    answer: Optional[int] = None  # 사용자 답안 (선택적)
 
 
 class ExplanationResponseItem(BaseModel):
