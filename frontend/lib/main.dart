@@ -2,14 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'firebase_options.dart';
-import 'services/fcm_service.dart';
 import 'routes/app_routes.dart';
 import 'theme/app_theme.dart';
+import 'config/di_container.dart';
+import 'services/fcm_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 1. SharedPreferences 동기 인스턴스 확보
+  final sharedPrefs = await SharedPreferences.getInstance();
+
+  // 2. DI Container 초기화 (SharedPreferences 포함)
+  await setupDependencies(sharedPrefs: sharedPrefs);
 
   // 🔥 개발 환경에서만 SSL 인증서 검증 우회
   // 프로덕션에서는 제거하거나 kDebugMode로 감싸기
@@ -48,7 +56,7 @@ void main() async {
 
   // FCM 초기화
   try {
-    await FCMService().initialize();
+    await getIt<FCMService>().initialize();
   } catch (e) {
     debugPrint('❌ FCM 초기화 실패: $e');
     // FCM 초기화 실패해도 앱은 계속 실행

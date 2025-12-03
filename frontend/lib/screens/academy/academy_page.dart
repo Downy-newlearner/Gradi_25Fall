@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -17,8 +18,10 @@ class AcademyPage extends StatefulWidget {
 
 class _AcademyPageState extends State<AcademyPage> {
   final List<AcademyItem> _registeredAcademies = [];
-  final AuthService _authService = AuthService();
-  final AcademyService _academyService = AcademyService();
+  final GetIt _getIt = GetIt.instance;
+
+  late final AuthService _authService;
+  late final AcademyService _academyService;
 
   bool _isLoading = false;
   bool _hasLoadedOnce = false; // 메모리 캐싱: 이미 로드했는지 확인
@@ -30,6 +33,8 @@ class _AcademyPageState extends State<AcademyPage> {
   @override
   void initState() {
     super.initState();
+    _authService = _getIt<AuthService>();
+    _academyService = _getIt<AcademyService>();
     _loadAcademies();
   }
 
@@ -198,29 +203,35 @@ class _AcademyPageState extends State<AcademyPage> {
 
             // 메인 콘텐츠
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 18),
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  await _loadAcademies(forceRefresh: true);
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(), // Pull-to-refresh를 위해 항상 스크롤 가능하도록
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 18),
 
-                    // 로딩 상태
-                    if (_isLoading)
-                      const Padding(
-                        padding: EdgeInsets.all(40.0),
-                        child: CircularProgressIndicator(),
-                      )
-                    // 에러 상태
-                    else if (_errorMessage != null)
-                      _buildErrorState()
-                    // 학원 목록 또는 빈 상태
-                    else if (_registeredAcademies.isEmpty)
-                      _buildEmptyState()
-                    else
-                      _buildAcademyList(),
+                      // 로딩 상태
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.all(40.0),
+                          child: CircularProgressIndicator(),
+                        )
+                      // 에러 상태
+                      else if (_errorMessage != null)
+                        _buildErrorState()
+                      // 학원 목록 또는 빈 상태
+                      else if (_registeredAcademies.isEmpty)
+                        _buildEmptyState()
+                      else
+                        _buildAcademyList(),
 
-                    const SizedBox(height: 20),
-                  ],
+                      const SizedBox(height: 20),
+                    ],
+                  ),
                 ),
               ),
             ),

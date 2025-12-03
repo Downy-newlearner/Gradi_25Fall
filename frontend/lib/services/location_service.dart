@@ -1,10 +1,12 @@
 import 'package:geolocator/geolocator.dart';
 import 'dart:developer' as developer;
 
+/// 위치 권한 및 현재 위치 조회를 담당하는 서비스
+///
+/// DI Container에서 singleton으로 관리되며,
+/// 이 파일에서는 별도의 싱글톤 패턴을 구현하지 않습니다.
 class LocationService {
-  static final LocationService _instance = LocationService._internal();
-  factory LocationService() => _instance;
-  LocationService._internal();
+  LocationService();
 
   /// 위치 권한 요청 및 현재 위치 가져오기
   Future<Position?> getCurrentLocation() async {

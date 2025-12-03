@@ -12,10 +12,10 @@ class StudentAnswerRepositoryImpl implements StudentAnswerRepository {
   final StudentAnswerMapper _mapper;
 
   StudentAnswerRepositoryImpl({
-    StudentAnswerApi? api,
-    StudentAnswerMapper? mapper,
-  }) : _api = api ?? StudentAnswerApi(),
-       _mapper = mapper ?? StudentAnswerMapper();
+    required StudentAnswerApi api,
+    required StudentAnswerMapper mapper,
+  })  : _api = api,
+        _mapper = mapper;
 
   @override
   Future<List<StudentAnswerEntity>> getStudentAnswersByResponseId(

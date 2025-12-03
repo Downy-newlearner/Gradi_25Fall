@@ -56,10 +56,10 @@ class SectionImageApi {
   final http.Client _httpClient;
 
   SectionImageApi({
-    AuthService? authService,
-    http.Client? httpClient,
-  })  : _authService = authService ?? AuthService(),
-        _httpClient = httpClient ?? http.Client();
+    required AuthService authService,
+    required http.Client httpClient,
+  })  : _authService = authService,
+        _httpClient = httpClient;
 
   /// Section 이미지 URL 조회
   ///

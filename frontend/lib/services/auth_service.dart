@@ -4,10 +4,12 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import '../config/api_config.dart';
 
+/// 인증 및 토큰 관리를 담당하는 서비스
+///
+/// DI Container에서 singleton으로 관리되며,
+/// 더 이상 파일 내부에서 직접 싱글톤 패턴을 구현하지 않습니다.
 class AuthService {
-  static final AuthService _instance = AuthService._internal();
-  factory AuthService() => _instance;
-  AuthService._internal();
+  AuthService();
 
   static const String _accessTokenKey = 'access_token';
   static const String _refreshTokenKey = 'refresh_token';

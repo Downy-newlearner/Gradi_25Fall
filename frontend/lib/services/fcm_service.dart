@@ -8,18 +8,29 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/notification/notification_entity.dart';
 import '../domain/notification/notification_repository.dart';
+import '../domain/notification/notification_type.dart';
 import '../data/notification/notification_local_data_source.dart';
 import '../data/notification/notification_repository_impl.dart';
 import '../utils/app_logger.dart';
 
+/// FCM 및 로컬 알림을 관리하는 서비스
+///
+/// - DI Container에서 singleton으로 관리됩니다.
+/// - 포그라운드 알림 저장 시 DI로 주입된 NotificationRepository를 사용합니다.
+/// - 백그라운드 알림 저장은 Firebase 제약상 여전히 독립적인 팩토리 함수를 사용합니다.
 class FCMService {
-  static final FCMService _instance = FCMService._internal();
-  factory FCMService() => _instance;
-  FCMService._internal();
+  final FirebaseMessaging _firebaseMessaging;
+  final FlutterLocalNotificationsPlugin _localNotifications;
+  final NotificationRepository _notificationRepository;
 
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications =
-      FlutterLocalNotificationsPlugin();
+  FCMService({
+    FirebaseMessaging? firebaseMessaging,
+    FlutterLocalNotificationsPlugin? localNotifications,
+    required NotificationRepository notificationRepository,
+  }) : _firebaseMessaging = firebaseMessaging ?? FirebaseMessaging.instance,
+       _localNotifications =
+           localNotifications ?? FlutterLocalNotificationsPlugin(),
+       _notificationRepository = notificationRepository;
 
   String? _fcmToken;
   String? get fcmToken => _fcmToken;
@@ -125,9 +136,27 @@ class FCMService {
       _handleNotificationTap(initialMessage);
     }
 
-    // 서버에 토큰 전송
-    if (_fcmToken != null) {
+    // 서버에 토큰 전송 (앱 최초 실행 시 1회)
+    await syncTokenWithServer();
+  }
+
+  /// 현재 보유한 FCM 토큰을 서버와 동기화
+  ///
+  /// - 토큰이 없는 경우 한 번 더 getToken을 시도합니다.
+  /// - 토큰이 있으면 `_sendTokenToServer`를 호출합니다.
+  Future<void> syncTokenWithServer() async {
+    try {
+      // 토큰이 아직 없는 경우 한 번 더 시도
+      _fcmToken ??= await _firebaseMessaging.getToken();
+
+      if (_fcmToken == null) {
+        developer.log('⚠️ syncTokenWithServer: FCM 토큰이 없어 서버 전송을 건너뜀');
+        return;
+      }
+
       await _sendTokenToServer(_fcmToken!);
+    } catch (e) {
+      developer.log('⚠️ syncTokenWithServer 중 오류 발생: $e');
     }
   }
 
@@ -170,23 +199,28 @@ class FCMService {
 
   /// 포그라운드 메시지 처리
   void _handleForegroundMessage(RemoteMessage message) async {
-    appLog('[notification:fcm_service] 포그라운드 메시지 수신 - messageId: ${message.messageId}');
+    appLog(
+      '[notification:fcm_service] 포그라운드 메시지 수신 - messageId: ${message.messageId}',
+    );
     appLog('[notification:fcm_service] 메시지 data: ${json.encode(message.data)}');
     if (message.notification != null) {
-      appLog('[notification:fcm_service] notification.title: ${message.notification!.title}');
-      appLog('[notification:fcm_service] notification.body: ${message.notification!.body}');
+      appLog(
+        '[notification:fcm_service] notification.title: ${message.notification!.title}',
+      );
+      appLog(
+        '[notification:fcm_service] notification.body: ${message.notification!.body}',
+      );
     }
     appLog('[notification:fcm_service] sentTime: ${message.sentTime}');
-    appLog('[notification:fcm_service] 전체 메시지 JSON: ${json.encode({
-      'messageId': message.messageId,
-      'data': message.data,
-      'notification': message.notification != null ? {
-        'title': message.notification!.title,
-        'body': message.notification!.body,
-      } : null,
-      'sentTime': message.sentTime?.toIso8601String(),
-    })}');
-    
+    appLog(
+      '[notification:fcm_service] 전체 메시지 JSON: ${json.encode({
+        'messageId': message.messageId,
+        'data': message.data,
+        'notification': message.notification != null ? {'title': message.notification!.title, 'body': message.notification!.body} : null,
+        'sentTime': message.sentTime?.toIso8601String(),
+      })}',
+    );
+
     developer.log('포그라운드 메시지 수신: ${message.messageId}');
 
     // 알림 표시
@@ -194,9 +228,16 @@ class FCMService {
 
     // 알림 저장
     try {
-      final repository = await buildNotificationRepository();
       final entity = NotificationEntity.fromRemoteMessage(message);
-      await repository.saveNotification(entity);
+
+      if (entity.type == NotificationType.grading) {
+        final timestamp = DateTime.now().toIso8601String();
+        appLog(
+          '[notification:fcm_service][timecheck][$timestamp] 채점 완료 알림 수신(포그라운드) - id=${entity.id}, title=${entity.title}',
+        );
+      }
+
+      await _notificationRepository.saveNotification(entity);
       developer.log('✅ 포그라운드 알림 저장 완료: ${entity.id}');
     } catch (e) {
       developer.log('❌ 포그라운드 알림 저장 실패: $e');
@@ -231,22 +272,27 @@ class FCMService {
 
   /// 알림 탭 처리
   void _handleNotificationTap(RemoteMessage message) {
-    appLog('[notification:fcm_service] 알림 탭됨 - messageId: ${message.messageId}');
+    appLog(
+      '[notification:fcm_service] 알림 탭됨 - messageId: ${message.messageId}',
+    );
     appLog('[notification:fcm_service] 메시지 data: ${json.encode(message.data)}');
     if (message.notification != null) {
-      appLog('[notification:fcm_service] notification.title: ${message.notification!.title}');
-      appLog('[notification:fcm_service] notification.body: ${message.notification!.body}');
+      appLog(
+        '[notification:fcm_service] notification.title: ${message.notification!.title}',
+      );
+      appLog(
+        '[notification:fcm_service] notification.body: ${message.notification!.body}',
+      );
     }
-    appLog('[notification:fcm_service] 전체 메시지 JSON: ${json.encode({
-      'messageId': message.messageId,
-      'data': message.data,
-      'notification': message.notification != null ? {
-        'title': message.notification!.title,
-        'body': message.notification!.body,
-      } : null,
-      'sentTime': message.sentTime?.toIso8601String(),
-    })}');
-    
+    appLog(
+      '[notification:fcm_service] 전체 메시지 JSON: ${json.encode({
+        'messageId': message.messageId,
+        'data': message.data,
+        'notification': message.notification != null ? {'title': message.notification!.title, 'body': message.notification!.body} : null,
+        'sentTime': message.sentTime?.toIso8601String(),
+      })}',
+    );
+
     developer.log('알림 탭됨: ${message.messageId}');
 
     // TODO: 알림 타입에 따라 페이지 이동
@@ -307,17 +353,11 @@ class FCMService {
       developer.log('알림 읽음 처리 중 오류 발생: $e');
     }
   }
-
-  /// NotificationRepository 팩토리 함수
-  Future<NotificationRepository> buildNotificationRepository() async {
-    final prefs = await SharedPreferences.getInstance();
-    final local = NotificationLocalDataSource(prefs);
-    return NotificationRepositoryImpl(local);
-  }
 }
 
 /// NotificationRepository 팩토리 함수 (백그라운드용)
-Future<NotificationRepository> _buildNotificationRepositoryForBackground() async {
+Future<NotificationRepository>
+_buildNotificationRepositoryForBackground() async {
   final prefs = await SharedPreferences.getInstance();
   final local = NotificationLocalDataSource(prefs);
   return NotificationRepositoryImpl(local);
@@ -327,28 +367,41 @@ Future<NotificationRepository> _buildNotificationRepositoryForBackground() async
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // appLog는 최상위 함수에서도 사용 가능
-  appLog('[notification:fcm_service] 백그라운드 메시지 수신 - messageId: ${message.messageId}');
+  appLog(
+    '[notification:fcm_service] 백그라운드 메시지 수신 - messageId: ${message.messageId}',
+  );
   appLog('[notification:fcm_service] 메시지 data: ${json.encode(message.data)}');
   if (message.notification != null) {
-    appLog('[notification:fcm_service] notification.title: ${message.notification!.title}');
-    appLog('[notification:fcm_service] notification.body: ${message.notification!.body}');
+    appLog(
+      '[notification:fcm_service] notification.title: ${message.notification!.title}',
+    );
+    appLog(
+      '[notification:fcm_service] notification.body: ${message.notification!.body}',
+    );
   }
   appLog('[notification:fcm_service] sentTime: ${message.sentTime}');
-  appLog('[notification:fcm_service] 전체 메시지 JSON: ${json.encode({
-    'messageId': message.messageId,
-    'data': message.data,
-    'notification': message.notification != null ? {
-      'title': message.notification!.title,
-      'body': message.notification!.body,
-    } : null,
-    'sentTime': message.sentTime?.toIso8601String(),
-  })}');
-  
+  appLog(
+    '[notification:fcm_service] 전체 메시지 JSON: ${json.encode({
+      'messageId': message.messageId,
+      'data': message.data,
+      'notification': message.notification != null ? {'title': message.notification!.title, 'body': message.notification!.body} : null,
+      'sentTime': message.sentTime?.toIso8601String(),
+    })}',
+  );
+
   developer.log('백그라운드 메시지 수신: ${message.messageId}');
-  
+
   try {
     final repository = await _buildNotificationRepositoryForBackground();
     final entity = NotificationEntity.fromRemoteMessage(message);
+
+    if (entity.type == NotificationType.grading) {
+      final timestamp = DateTime.now().toIso8601String();
+      appLog(
+        '[notification:fcm_service][timecheck][$timestamp] 채점 완료 알림 수신(백그라운드) - id=${entity.id}, title=${entity.title}',
+      );
+    }
+
     await repository.saveNotification(entity);
     developer.log('✅ 백그라운드 알림 저장 완료: ${entity.id}');
   } catch (e) {

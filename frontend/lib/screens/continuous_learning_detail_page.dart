@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_header_menu_button.dart';
 import '../widgets/back_button.dart';
 import '../services/continuous_learning_api.dart';
 import '../services/academy_service.dart';
 import '../services/auth_service.dart';
+import '../services/daily_learning_service.dart';
+import '../services/workbook_api.dart';
 import '../services/get_monthly_learning_status_use_case_impl.dart';
 import '../domain/learning/get_monthly_learning_status_use_case.dart';
 import '../domain/learning/daily_learning_status.dart';
@@ -33,10 +36,12 @@ class _ContinuousLearningDetailPageState
   late int _currentMonth;
   late int _currentYear;
 
-  // Services
-  final AuthService _authService = AuthService();
-  final AcademyService _academyService = AcademyService();
-  final ContinuousLearningApi _continuousLearningApi = ContinuousLearningApi();
+  final GetIt _getIt = GetIt.instance;
+
+  // Services (DI에서 주입)
+  late final AuthService _authService;
+  late final AcademyService _academyService;
+  late final ContinuousLearningApi _continuousLearningApi;
 
   // UseCase 접근 (widget을 통해)
   GetMonthlyLearningStatusUseCase get _monthlyStatusUseCase =>
@@ -50,9 +55,17 @@ class _ContinuousLearningDetailPageState
   int _totalProblems = 0;
   bool _isLoadingStatistics = false;
 
+  // Selected date learning data
+  DateTime? _selectedDate;
+  DailyLearningResult? _selectedDateResult;
+  bool _isLoadingSelectedDate = false;
+
   @override
   void initState() {
     super.initState();
+    _authService = _getIt<AuthService>();
+    _academyService = _getIt<AcademyService>();
+    _continuousLearningApi = _getIt<ContinuousLearningApi>();
     // 현재 날짜를 기반으로 초기 월/년 설정
     final now = DateTime.now();
     _currentMonth = now.month;
@@ -117,17 +130,18 @@ class _ContinuousLearningDetailPageState
       // UseCase 구현체의 callWithContext 호출
       final month = DateTime(_currentYear, _currentMonth, 1);
       if (_monthlyStatusUseCase is GetMonthlyLearningStatusUseCaseImpl) {
-        final statuses = await (_monthlyStatusUseCase as GetMonthlyLearningStatusUseCaseImpl)
-            .callWithContext(
-          month: month,
-          academyId: userAcademyId,
-          academyUserIds: academyUserIds,
-        );
+        final statuses =
+            await (_monthlyStatusUseCase as GetMonthlyLearningStatusUseCaseImpl)
+                .callWithContext(
+                  month: month,
+                  academyId: userAcademyId,
+                  academyUserIds: academyUserIds,
+                );
 
         setState(() {
           _currentMonthStatuses = {
             for (var status in statuses)
-              DailyLearningStatus.normalizeDate(status.date): status
+              DailyLearningStatus.normalizeDate(status.date): status,
           };
         });
       } else {
@@ -136,7 +150,7 @@ class _ContinuousLearningDetailPageState
         setState(() {
           _currentMonthStatuses = {
             for (var status in statuses)
-              DailyLearningStatus.normalizeDate(status.date): status
+              DailyLearningStatus.normalizeDate(status.date): status,
           };
         });
       }
@@ -242,8 +256,10 @@ class _ContinuousLearningDetailPageState
                     _buildCalendarSection(),
                     SizedBox(height: screenHeight * 0.033),
                     _buildStatisticsSection(),
-                    SizedBox(height: screenHeight * 0.016),
-                    _buildAccumulatedLearningSection(),
+                    if (_selectedDate != null) ...[
+                      SizedBox(height: screenHeight * 0.016),
+                      _buildSelectedDateLearningSection(),
+                    ],
                     SizedBox(height: screenHeight * 0.02),
                   ],
                 ),
@@ -469,20 +485,42 @@ class _ContinuousLearningDetailPageState
 
   /// 날짜 셀 탭 핸들러
   void _onDateCellTapped(DateTime date) {
-    final timestamp = DateTime.now().toIso8601String();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '선택된 날짜: ${_formatDate(date)}\nTimestamp: $timestamp',
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    _showDateLearningDialog(date);
   }
 
-  /// 날짜 포맷팅 (YYYY-MM-DD)
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  /// 날짜 클릭 시 학습 데이터 표시
+  ///
+  /// [date]: 선택된 날짜 (어떤 타임존이든 상관없음, KST로 변환됨)
+  Future<void> _showDateLearningDialog(DateTime date) async {
+    // 같은 날짜를 다시 클릭하면 숨기기
+    if (_selectedDate != null &&
+        _selectedDate!.year == date.year &&
+        _selectedDate!.month == date.month &&
+        _selectedDate!.day == date.day) {
+      setState(() {
+        _selectedDate = null;
+        _selectedDateResult = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedDate = date;
+      _isLoadingSelectedDate = true;
+      _selectedDateResult = null;
+    });
+
+    // 데이터 로드
+    final learningService = _getIt<DailyLearningService>();
+    final result = await learningService.getDailyLearningData(date);
+
+    // 데이터 로드 완료 후 상태 업데이트
+    if (!mounted) return;
+
+    setState(() {
+      _selectedDateResult = result;
+      _isLoadingSelectedDate = false;
+    });
   }
 
   Widget _buildDateCell({
@@ -496,48 +534,45 @@ class _ContinuousLearningDetailPageState
           ? () => _onDateCellTapped(date)
           : null,
       child: Padding(
-      padding: const EdgeInsets.only(bottom: 32),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // 날짜 박스
-          if (isCurrentMonth)
-            Container(
-              width: 41,
-              height: 43,
-              decoration: isCompleted
-                  ? BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+        padding: const EdgeInsets.only(bottom: 32),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // 날짜 박스
+            if (isCurrentMonth)
+              Container(
+                width: 41,
+                height: 43,
+                decoration: isCompleted
+                    ? BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                           // 로고 그라데이션: linear-gradient(121.67deg, #AC5BF8 19.64%, #636ACF 77.54%)
-                          colors: [
-                            Color(0xFFAC5BF8),
-                            Color(0xFF636ACF),
-                          ],
+                          colors: [Color(0xFFAC5BF8), Color(0xFF636ACF)],
                           stops: [0.1964, 0.7754],
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                    )
-                  : BoxDecoration(
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      )
+                    : BoxDecoration(
                         color: const Color(0xFFE1E7ED), // 회색
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+              ),
+            // 날짜 텍스트
+            Text(
+              '$day',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w500,
+                fontSize: 15,
+                color: isCurrentMonth
+                    ? (isCompleted ? Colors.white : const Color(0xFF000000))
+                    : const Color(0xFF707070),
+              ),
+              textAlign: TextAlign.center,
             ),
-          // 날짜 텍스트
-          Text(
-            '$day',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w500,
-              fontSize: 15,
-              color: isCurrentMonth
-                  ? (isCompleted ? Colors.white : const Color(0xFF000000))
-                  : const Color(0xFF707070),
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -588,37 +623,98 @@ class _ContinuousLearningDetailPageState
     );
   }
 
-  Widget _buildAccumulatedLearningSection() {
-    // TODO: DB에서 누적 학습량 데이터 조회
-    final learningData = [
-      {'name': '블랙라벨 중등수학 1-1', 'progress': 100},
-      {'name': '라이트쎈 중등수학 1-1', 'progress': 46},
-      {'name': '100발 100중 중등수학 2-2', 'progress': 23},
-    ];
+  Widget _buildSelectedDateLearningSection() {
+    if (_isLoadingSelectedDate) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(20),
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFAC5BF8)),
+            ),
+          ),
+        ),
+      );
+    }
 
+    if (_selectedDateResult == null) {
+      return const SizedBox.shrink();
+    }
+
+    final result = _selectedDateResult!;
+
+    // 에러 상태
+    if (result.hasError) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FA),
+          border: Border.all(color: const Color(0xFFE1E7ED)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.error_outline, color: Color(0xFFFF6B6B), size: 48),
+            const SizedBox(height: 12),
+            Text(
+              result.errorMessage ?? '데이터를 불러오는데 실패했습니다.',
+              style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                color: Color(0xFFFF6B6B),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 빈 상태
+    if (!result.hasData) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FA),
+          border: Border.all(color: const Color(0xFFE1E7ED)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Text(
+          '해당 날짜에 학습 기록이 없습니다.',
+          style: TextStyle(
+            fontFamily: 'Pretendard',
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
+            color: Color(0xFF999999),
+          ),
+        ),
+      );
+    }
+
+    // 데이터 있음
+    final books = DailyLearningService.extractBooks(result);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: learningData.map((data) {
-        return _buildLearningItem(
-          name: data['name'] as String,
-          progress: data['progress'] as int,
-        );
-      }).toList(),
+      children: books
+          .map((book) => _buildSelectedDateLearningItem(book))
+          .toList(),
     );
   }
 
-  Widget _buildLearningItem({required String name, required int progress}) {
-    final screenWidth = MediaQuery.of(context).size.width;
+  Widget _buildSelectedDateLearningItem(BookData book) {
+    final progress = book.bookPage > 0
+        ? book.totalSolvedPages / book.bookPage
+        : 0.0;
+
     final screenHeight = MediaQuery.of(context).size.height;
 
     return Container(
       margin: EdgeInsets.only(bottom: screenHeight * 0.016),
-      padding: EdgeInsets.fromLTRB(
-        screenWidth * 0.047,
-        screenHeight * 0.017,
-        screenWidth * 0.047,
-        screenHeight * 0.024,
-      ),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: const Color(0xFFF8F9FA),
         border: Border.all(color: const Color(0xFFE1E7ED)),
@@ -627,16 +723,18 @@ class _ContinuousLearningDetailPageState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 책 이름
           Text(
-            name,
+            book.bookName ?? '문제집 ${book.bookId}',
             style: const TextStyle(
               fontFamily: 'Pretendard',
               fontWeight: FontWeight.w700,
-              fontSize: 12,
-              color: Color(0xFF585B69),
+              fontSize: 14,
+              color: Color(0xFF333333),
             ),
           ),
-          SizedBox(height: screenHeight * 0.011),
+          const SizedBox(height: 12),
+          // 프로그레스 바
           Row(
             children: [
               Expanded(
@@ -647,7 +745,8 @@ class _ContinuousLearningDetailPageState
                     borderRadius: BorderRadius.all(Radius.circular(10)),
                   ),
                   child: FractionallySizedBox(
-                    widthFactor: progress / 100,
+                    widthFactor: progress.clamp(0.0, 1.0),
+                    alignment: Alignment.centerLeft,
                     child: Container(
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
@@ -664,6 +763,17 @@ class _ContinuousLearningDetailPageState
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          // 진행 정보
+          Text(
+            '${book.totalSolvedPages} / ${book.bookPage} 페이지',
+            style: const TextStyle(
+              fontFamily: 'Pretendard',
+              fontWeight: FontWeight.w500,
+              fontSize: 12,
+              color: Color(0xFF666666),
+            ),
           ),
         ],
       ),

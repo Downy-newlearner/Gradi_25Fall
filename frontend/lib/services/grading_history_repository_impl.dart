@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../domain/grading_history/grading_history_entity.dart';
 import '../domain/grading_history/grading_history_repository.dart';
 import 'grading_history_api.dart';
-import 'grading_history_use_case.dart';
+import '../data/mappers/grading_history_mapper.dart';
 import 'academy_service.dart';
 
 /// Grading History Repository 구현체
@@ -12,15 +12,15 @@ import 'academy_service.dart';
 /// API 호출, className 조회, 캐싱을 담당합니다.
 class GradingHistoryRepositoryImpl implements GradingHistoryRepository {
   GradingHistoryRepositoryImpl({
-    GradingHistoryApi? api,
-    GradingHistoryUseCase? useCase,
-    AcademyService? academyService,
-  }) : _api = api ?? GradingHistoryApi(),
-       _useCase = useCase ?? GradingHistoryUseCase(),
-       _academyService = academyService ?? AcademyService();
+    required GradingHistoryApi api,
+    required GradingHistoryMapper mapper,
+    required AcademyService academyService,
+  })  : _api = api,
+        _mapper = mapper,
+        _academyService = academyService;
 
   final GradingHistoryApi _api;
-  final GradingHistoryUseCase _useCase;
+  final GradingHistoryMapper _mapper;
   final AcademyService _academyService;
 
   static const String _cacheKeyPrefix = 'grading_history_';
@@ -50,8 +50,8 @@ class GradingHistoryRepositoryImpl implements GradingHistoryRepository {
             : null;
       }
 
-      // 4. UseCase로 변환
-      final entities = _useCase.convertApiResponsesToEntities(
+      // 4. Mapper로 변환
+      final entities = _mapper.convertApiResponsesToEntities(
         apiResponses,
         classNameMap,
       );

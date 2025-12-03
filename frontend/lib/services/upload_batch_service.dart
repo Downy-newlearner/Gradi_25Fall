@@ -8,6 +8,16 @@ import '../utils/app_logger.dart';
 import 'auth_service.dart';
 import 'academy_service.dart';
 
+class NoAcademyException implements Exception {
+  final String message;
+  NoAcademyException([
+    this.message = '등록된 학원이 없습니다. 학원을 먼저 등록해주세요.',
+  ]);
+
+  @override
+  String toString() => message;
+}
+
 class UploadContext {
   final int academyUserId;
   final int userId;
@@ -62,7 +72,7 @@ class UploadBatchService {
 
     final academyCode = await _academyService.getDefaultAcademyCode();
     if (academyCode == null) {
-      throw Exception('디폴트 학원 코드를 찾을 수 없습니다. 학원을 먼저 등록해주세요.');
+      throw NoAcademyException();
     }
 
     appLog('[UploadBatchService] 디폴트 학원 코드: $academyCode');
@@ -79,7 +89,7 @@ class UploadBatchService {
         appLog('[UploadBatchService] API에서 ${academies.length}개의 학원을 가져옴');
 
         if (academies.isEmpty) {
-          throw Exception('등록된 학원이 없습니다. 학원을 먼저 등록해주세요.');
+          throw NoAcademyException();
         }
 
         // 등록완료된 학원만 필터링
@@ -90,7 +100,7 @@ class UploadBatchService {
         appLog('[UploadBatchService] 등록완료된 학원: ${registeredAcademies.length}개');
 
         if (registeredAcademies.isEmpty) {
-          throw Exception('등록완료된 학원이 없습니다. 학원 등록을 완료해주세요.');
+          throw NoAcademyException();
         }
 
         // 학원 코드 목록 로깅
@@ -132,7 +142,7 @@ class UploadBatchService {
     // 하지만 방어적 프로그래밍을 위해 null 체크 유지
     // ignore: dead_code, unnecessary_null_comparison
     if (academy == null) {
-      throw Exception('디폴트 학원 정보를 찾을 수 없습니다. 학원을 먼저 등록해주세요.');
+      throw NoAcademyException();
     }
 
     final finalAcademy = academy;

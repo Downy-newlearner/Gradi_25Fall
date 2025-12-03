@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import 'academy_list_page.dart';
 import '../../services/academy_service.dart';
 import '../../services/auth_service.dart';
@@ -14,8 +15,10 @@ class AcademyDetailPage extends StatefulWidget {
 }
 
 class _AcademyDetailPageState extends State<AcademyDetailPage> {
-  final AcademyService _academyService = AcademyService();
-  final AuthService _authService = AuthService();
+  final GetIt _getIt = GetIt.instance;
+
+  late final AcademyService _academyService;
+  late final AuthService _authService;
   bool _isLoading = false;
 
   // 학원 스케줄 관련 상태
@@ -33,6 +36,8 @@ class _AcademyDetailPageState extends State<AcademyDetailPage> {
   @override
   void initState() {
     super.initState();
+    _academyService = _getIt<AcademyService>();
+    _authService = _getIt<AuthService>();
     _loadAcademySchedule();
     _loadAcademyImages();
   }

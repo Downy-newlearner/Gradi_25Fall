@@ -13,8 +13,9 @@ class GradingHistoryItem {
   final String? bookCoverImageUrl;
   final DateTime gradingDate;
 
-  /// 페이지 범위 문자열 (예: "14-20")
-  String get pageRange => '$startPage-$endPage';
+  /// 페이지 범위 문자열 (예: "14-20", start == end이면 "14"만 표시)
+  String get pageRange =>
+      startPage == endPage ? '$endPage' : '$startPage-$endPage';
 
   const GradingHistoryItem({
     required this.studentResponseId,

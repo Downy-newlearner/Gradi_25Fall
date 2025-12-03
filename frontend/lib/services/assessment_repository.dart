@@ -12,12 +12,12 @@ import 'assessment_local_store.dart';
 /// API 성공 시 SharedPreferences → 메모리 순으로 동기화합니다.
 class AssessmentRepository {
   AssessmentRepository({
-    AssessmentApi? api,
-    AssessmentLocalStore? localStore,
-    AcademyService? academyService,
-  }) : _api = api ?? AssessmentApi(),
-       _localStore = localStore ?? AssessmentLocalStore(),
-       _academyService = academyService ?? AcademyService();
+    required AssessmentApi api,
+    required AssessmentLocalStore localStore,
+    required AcademyService academyService,
+  })  : _api = api,
+        _localStore = localStore,
+        _academyService = academyService;
 
   final AssessmentApi _api;
   final AssessmentLocalStore _localStore;

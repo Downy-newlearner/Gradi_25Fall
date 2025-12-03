@@ -10,10 +10,10 @@ class SectionImageRepositoryImpl implements SectionImageRepository {
   final SectionImageMapper _mapper;
 
   SectionImageRepositoryImpl({
-    SectionImageApi? api,
-    SectionImageMapper? mapper,
-  })  : _api = api ?? SectionImageApi(),
-        _mapper = mapper ?? SectionImageMapper();
+    required SectionImageApi api,
+    required SectionImageMapper mapper,
+  })  : _api = api,
+        _mapper = mapper;
 
   @override
   Future<SectionImageEntity?> getSectionImageUrl({

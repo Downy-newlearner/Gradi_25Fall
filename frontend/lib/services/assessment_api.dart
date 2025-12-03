@@ -9,9 +9,11 @@ import 'auth_service.dart';
 
 /// 서버와 통신하여 Assessment 데이터를 가져오는 전용 API 레이어.
 class AssessmentApi {
-  AssessmentApi({AuthService? authService, http.Client? httpClient})
-    : _authService = authService ?? AuthService(),
-      _httpClient = httpClient ?? http.Client();
+  AssessmentApi({
+    required AuthService authService,
+    required http.Client httpClient,
+  })  : _authService = authService,
+        _httpClient = httpClient;
 
   final AuthService _authService;
   final http.Client _httpClient;

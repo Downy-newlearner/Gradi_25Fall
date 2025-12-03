@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../domain/student_answer/get_student_answers_for_response_use_case.dart';
 import '../../domain/student_answer/update_student_answers_use_case.dart';
-import '../../domain/student_answer/student_answer_update.dart';
+import '../../domain/student_answer/update_single_student_answer_use_case.dart';
 import '../../domain/section_image/get_section_image_use_case.dart';
 import 'models/grading_result.dart';
 
@@ -11,6 +11,7 @@ class EditGradingResultPage extends StatefulWidget {
   final GetStudentAnswersForResponseUseCase getStudentAnswersUseCase;
   final UpdateStudentAnswersUseCase updateStudentAnswersUseCase;
   final GetSectionImageUseCase getSectionImageUseCase; // 추가
+  final UpdateSingleStudentAnswerUseCase updateSingleStudentAnswerUseCase;
 
   const EditGradingResultPage({
     super.key,
@@ -19,6 +20,7 @@ class EditGradingResultPage extends StatefulWidget {
     required this.getStudentAnswersUseCase,
     required this.updateStudentAnswersUseCase,
     required this.getSectionImageUseCase, // 추가
+    required this.updateSingleStudentAnswerUseCase,
   });
 
   @override
@@ -28,10 +30,12 @@ class EditGradingResultPage extends StatefulWidget {
 class _EditGradingResultPageState extends State<EditGradingResultPage> {
   // 상태 변수
   bool _isLoading = false;
-  bool _isSaving = false; // 저장 중 상태 추가
+  bool _isSavingSingle = false; // 단일 수정 저장 중
   String? _errorMessage;
   List<GradingResult> _results = [];
   List<GradingResult> _originalResults = []; // 원본 데이터 (수정 여부 판단용)
+
+  bool get _isSaving => _isSavingSingle;
 
   // UI 상태
   int? _selectedProblemIndex;
@@ -91,6 +95,7 @@ class _EditGradingResultPageState extends State<EditGradingResultPage> {
                 questionNumber: r.questionNumber,
                 subQuestionNumber: r.subQuestionNumber,
                 studentAnswerId: r.studentAnswerId,
+                chapterId: r.chapterId,
                 recognizedAnswer: r.recognizedAnswer,
                 correctStatus: r.correctStatus,
               ),
@@ -108,94 +113,113 @@ class _EditGradingResultPageState extends State<EditGradingResultPage> {
     }
   }
 
-  /// 수정된 답안들을 서버에 저장
-  Future<void> _saveAnswers() async {
-    // 수정된 항목만 추려서 payload 생성
-    final updates = <StudentAnswerUpdate>[];
-    for (int i = 0; i < _results.length; i++) {
-      final current = _results[i];
-      final original = _originalResults[i];
 
-      if (current.recognizedAnswer != original.recognizedAnswer) {
-        updates.add(
-          StudentAnswerUpdate(
-            studentAnswerId: current.studentAnswerId,
-            newAnswer: current.recognizedAnswer,
-          ),
-        );
-      }
-    }
+  void _updateAnswer() {
+    if (_selectedProblemIndex == null) return;
 
-    if (updates.isEmpty) {
-      // 수정된 항목이 없으면 그냥 닫기
-      Navigator.of(context).pop();
+    final index = _selectedProblemIndex!;
+    final newAnswer = _answerController.text.trim();
+    final oldAnswer = _results[index].recognizedAnswer.trim();
+
+    if (newAnswer.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('답안을 입력해주세요.')),
+      );
       return;
     }
 
-    // 저장 중 상태 설정
+    if (newAnswer == oldAnswer) {
+      // 버튼 비활성 상태가 기본이지만 방어적으로 한 번 더 체크
+      return;
+    }
+
+    _updateAnswerInternal(index: index, newAnswer: newAnswer);
+  }
+
+  Future<void> _updateAnswerInternal({
+    required int index,
+    required String newAnswer,
+  }) async {
     if (!mounted) return;
+
     setState(() {
-      _isSaving = true;
+      _isSavingSingle = true;
     });
 
     try {
-      await widget.updateStudentAnswersUseCase.call(updates);
+      final current = _results[index];
+      
+      // chapterId가 null이거나 0이면 에러 발생
+      if (current.chapterId == null || current.chapterId == 0) {
+        throw Exception('챕터 정보가 없어 답안을 수정할 수 없습니다.');
+      }
+
+      final updated =
+          await widget.updateSingleStudentAnswerUseCase.call(
+        studentAnswerId: current.studentAnswerId,
+        studentResponseId: widget.studentResponseId,
+        questionNumber: current.questionNumber,
+        subQuestionNumber: current.subQuestionNumber,
+        newAnswer: newAnswer,
+        chapterId: current.chapterId!,
+      );
 
       if (!mounted) return;
 
+      // 새로운 GradingResult 객체 생성하여 교체 (Flutter가 변경 감지하도록)
+      final currentResult = _results[index];
+      
+      // 서버 응답의 isCorrect 값을 사용하여 correctStatus 계산
+      final newCorrectStatus = updated.isCorrect == true ? '정답' : '오답';
+      
+      final updatedResult = GradingResult(
+        questionNumber: currentResult.questionNumber,
+        subQuestionNumber: currentResult.subQuestionNumber,
+        studentAnswerId: currentResult.studentAnswerId,
+        chapterId: currentResult.chapterId,
+        recognizedAnswer: updated.recognizedAnswer,
+        correctStatus: newCorrectStatus,
+      );
+
+      final updatedOriginalResult = GradingResult(
+        questionNumber: currentResult.questionNumber,
+        subQuestionNumber: currentResult.subQuestionNumber,
+        studentAnswerId: currentResult.studentAnswerId,
+        chapterId: currentResult.chapterId,
+        recognizedAnswer: updated.recognizedAnswer,
+        correctStatus: newCorrectStatus,
+      );
+
       setState(() {
-        _isSaving = false;
+        _results[index] = updatedResult;
+        _originalResults[index] = updatedOriginalResult;
+        _isEditingAnswer = false;
+        _answerController.clear();
+        _isSavingSingle = false;
       });
 
-      // 성공 시 다이얼로그 표시 후 닫기
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text(
-            '저장 완료',
-            style: TextStyle(
-              fontFamily: 'Pretendard',
-              fontWeight: FontWeight.w700,
-            ),
+      // 성공 메시지 표시
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('답안이 수정되었습니다.'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Color(0xFF4CAF50),
           ),
-          content: const Text(
-            '답안이 저장되었습니다.',
-            style: TextStyle(
-              fontFamily: 'Pretendard',
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // 다이얼로그 닫기
-                Navigator.of(context).pop(); // Edit 페이지 닫기
-              },
-              child: const Text(
-                '확인',
-                style: TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFFAC5BF8),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
+        );
+      }
     } catch (e) {
       if (!mounted) return;
-
       setState(() {
-        _isSaving = false;
+        _isSavingSingle = false;
       });
-
-      // 에러 다이얼로그 표시
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('저장 실패'),
-          content: Text('답안 저장에 실패했습니다. 잠시 후 다시 시도해주세요.'),
+          content: const Text(
+            '답안 수정에 실패했습니다. 잠시 후 다시 시도해주세요.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -204,17 +228,6 @@ class _EditGradingResultPageState extends State<EditGradingResultPage> {
           ],
         ),
       );
-    }
-  }
-
-  void _updateAnswer() {
-    if (_selectedProblemIndex != null && _answerController.text.isNotEmpty) {
-      setState(() {
-        _results[_selectedProblemIndex!].recognizedAnswer =
-            _answerController.text;
-        _isEditingAnswer = false;
-        _answerController.clear();
-      });
     }
   }
 
@@ -330,7 +343,6 @@ class _EditGradingResultPageState extends State<EditGradingResultPage> {
                     ),
                   ),
                 ),
-                _buildBottomButton(screenWidth, screenHeight),
               ],
             ),
             // 저장 중 오버레이
@@ -497,6 +509,7 @@ class _EditGradingResultPageState extends State<EditGradingResultPage> {
             final isWrong = highlightWrong && items[index] == '오답';
             return GestureDetector(
               onTap: () {
+                if (_isSaving) return;
                 setState(() {
                   _selectedProblemIndex = index;
                   _isEditingAnswer = false;
@@ -773,52 +786,4 @@ class _EditGradingResultPageState extends State<EditGradingResultPage> {
     );
   }
 
-  Widget _buildBottomButton(double screenWidth, double screenHeight) {
-    return Container(
-      width: screenWidth * 0.851,
-      height: screenHeight * 0.057,
-      margin: EdgeInsets.symmetric(
-        horizontal: screenWidth * 0.075,
-        vertical: screenHeight * 0.015,
-      ),
-      child: GestureDetector(
-        onTap: _isSaving
-            ? null // 저장 중에는 클릭 불가
-            : () {
-                if (_selectedProblemIndex != null && _isEditingAnswer) {
-                  _updateAnswer();
-                } else {
-                  _saveAnswers();
-                }
-              },
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: _isSaving
-                  ? [Colors.grey, Colors.grey] // 저장 중에는 회색
-                  : const [Color(0xFFAC5BF8), Color(0xFF636ACF)],
-              begin: const Alignment(0.0, -1.0),
-              end: const Alignment(0.0, 1.0),
-            ),
-            borderRadius: BorderRadius.circular(5),
-          ),
-          child: Center(
-            child: Text(
-              _isSaving
-                  ? '저장 중...'
-                  : (_selectedProblemIndex != null && _isEditingAnswer)
-                  ? '답 수정하기'
-                  : '답 저장하기',
-              style: const TextStyle(
-                fontFamily: 'Pretendard',
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }

@@ -13,6 +13,11 @@ import 'auth_service.dart';
 ///   - event: "upload-url" → data: presigned URL 1개
 ///   - event: "ping" → keep-alive
 class UploadSseService {
+  final AuthService _authService;
+
+  UploadSseService({AuthService? authService})
+      : _authService = authService ?? AuthService();
+
   SSEClient? _sseClient;
   StreamSubscription<Event>? _subscription;
   final StreamController<String> _uploadUrlController =
@@ -29,7 +34,7 @@ class UploadSseService {
     }
 
     try {
-      final token = await AuthService().ensureValidAccessToken();
+      final token = await _authService.ensureValidAccessToken();
       if (token == null) {
         throw Exception('인증 토큰이 없습니다. SSE 연결을 시작할 수 없습니다.');
       }

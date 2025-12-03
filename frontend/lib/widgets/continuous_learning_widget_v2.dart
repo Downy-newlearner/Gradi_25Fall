@@ -98,7 +98,9 @@ class _ContinuousLearningWidgetV2State
   }
 
   // 월 전환 트리거 관련 상수
-  static const double _monthChangeEdgeItemCount = 1.5; // 끝에서 아이템 1.5개 이내면 전환
+  // 오버스크롤 임계값: 스크롤이 끝을 넘어서 일정 거리 이상 오버스크롤했을 때만 전환
+  static const double _monthChangeOverScrollThreshold =
+      0.3; // 아이템 0.3개 너비 이상 오버스크롤 (더 유연하게)
 
   // 경계 월 제한 (추후 비즈니스 룰에 따라 주입 가능)
   DateTime? _minMonth;
@@ -162,6 +164,16 @@ class _ContinuousLearningWidgetV2State
   @override
   void didUpdateWidget(covariant ContinuousLearningWidgetV2 oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // monthlyStatusUseCase가 변경되었거나 추가되었을 때 상태 로드
+    if (widget.monthlyStatusUseCase != null &&
+        (oldWidget.monthlyStatusUseCase == null ||
+            oldWidget.monthlyStatusUseCase != widget.monthlyStatusUseCase)) {
+      _loadMonthlyStatuses();
+    }
+
+    // dailyStatusMap이 변경되었을 때는 자동으로 반영됨 (widget.dailyStatusMap 사용)
+
     final newSelected = widget.selectedDate ?? DateTime.now();
     if (!_isSameDay(newSelected, _selectedDate)) {
       setState(() {
@@ -316,6 +328,11 @@ class _ContinuousLearningWidgetV2State
       }
     });
 
+    // 새 월의 학습 상태 로드
+    if (widget.monthlyStatusUseCase != null) {
+      _loadMonthlyStatuses();
+    }
+
     // 스크롤 위치 조정: _currentMonth와 _selectedDate가 이미 동기화되어 있으므로 직접 스크롤
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -357,24 +374,27 @@ class _ContinuousLearningWidgetV2State
     final max = position.maxScrollExtent;
     final width = itemWidth;
 
-    // 힌트 표시 임계값 (월 전환보다 넓게 설정)
-    final hintThreshold = width * 3.0; // 3개 아이템 너비
+    // 힌트 표시 임계값: 스크롤이 끝에 거의 도달했을 때만 표시
+    // 오버스크롤(음수 또는 max 초과) 상태에서만 힌트 표시
+    final hintThreshold = width * 0.2; // 0.2개 아이템 너비 (더 유연하게)
 
-    // 다음 달 힌트 표시 조건
+    // 다음 달 힌트 표시 조건: 오른쪽 끝을 넘어서 오버스크롤 상태
     final nextMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
     final canMoveToNext =
         _maxMonth == null ||
         nextMonth.isBefore(_maxMonth!) ||
         nextMonth.isAtSameMomentAs(_maxMonth!);
-    final shouldShowNextHint = pixels >= max - hintThreshold && canMoveToNext;
+    // max를 넘어서 오버스크롤했을 때만 힌트 표시
+    final shouldShowNextHint = pixels > max + hintThreshold && canMoveToNext;
 
-    // 이전 달 힌트 표시 조건
+    // 이전 달 힌트 표시 조건: 왼쪽 끝을 넘어서 오버스크롤 상태
     final prevMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
     final canMoveToPrev =
         _minMonth == null ||
         prevMonth.isAfter(_minMonth!) ||
         prevMonth.isAtSameMomentAs(_minMonth!);
-    final shouldShowPrevHint = pixels <= hintThreshold && canMoveToPrev;
+    // 0을 넘어서 오버스크롤했을 때만 힌트 표시
+    final shouldShowPrevHint = pixels < -hintThreshold && canMoveToPrev;
 
     if (mounted) {
       setState(() {
@@ -421,14 +441,18 @@ class _ContinuousLearningWidgetV2State
     final max = position.maxScrollExtent;
     final width = itemWidth; // getter 사용
 
-    // 오른쪽 끝 근처에서 멈췄으면 → 다음 달
-    if (pixels >= max - width * _monthChangeEdgeItemCount) {
+    // 오른쪽 끝 근처에서 오버스크롤했을 때 → 다음 달
+    // max를 넘어서 오버스크롤했거나, max 근처에서 스크롤이 끝났을 때 전환
+    final nextMonthThreshold = width * _monthChangeOverScrollThreshold;
+    if (pixels > max - nextMonthThreshold || pixels > max) {
       _navigateToNextMonth();
       return true; // 이벤트 소비
     }
 
-    // 왼쪽 끝 근처에서 멈췄으면 → 이전 달
-    if (pixels <= width * _monthChangeEdgeItemCount) {
+    // 왼쪽 끝 근처에서 오버스크롤했을 때 → 이전 달
+    // 0을 넘어서 오버스크롤했거나, 0 근처에서 스크롤이 끝났을 때 전환
+    final prevMonthThreshold = width * _monthChangeOverScrollThreshold;
+    if (pixels < prevMonthThreshold || pixels < 0) {
       _navigateToPreviousMonth();
       return true; // 이벤트 소비
     }
@@ -629,17 +653,6 @@ class _ContinuousLearningWidgetV2State
 
     return GestureDetector(
       onTap: () {
-        // 날짜 탭 시 SnackBar 표시 (임시)
-        final timestamp = DateTime.now().toIso8601String();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '선택된 날짜: ${_formatDate(date)}\nTimestamp: $timestamp',
-            ),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
         // 날짜 탭 시: 같은 달만 바뀐다 → 월은 바꾸지 않고, 단순히 선택만 변경
         setState(() {
           _selectedDate = date;

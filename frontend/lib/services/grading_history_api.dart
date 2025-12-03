@@ -56,9 +56,11 @@ class GradingHistoryApiResponse {
 
 /// Grading History API 호출 전용 레이어
 class GradingHistoryApi {
-  GradingHistoryApi({AuthService? authService, http.Client? httpClient})
-    : _authService = authService ?? AuthService(),
-      _httpClient = httpClient ?? http.Client();
+  GradingHistoryApi({
+    required AuthService authService,
+    required http.Client httpClient,
+  })  : _authService = authService,
+        _httpClient = httpClient;
 
   final AuthService _authService;
   final http.Client _httpClient;

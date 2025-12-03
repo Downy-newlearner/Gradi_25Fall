@@ -1,10 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import '../../services/assessment_repository.dart';
 import '../../services/academy_service.dart';
 import '../../services/auth_service.dart';
 import '../../utils/academy_utils.dart';
 import '../../routes/app_routes.dart';
 import '../../widgets/back_button.dart';
+import '../../widgets/empty_state_message.dart';
+
+enum HomeworkStatusViewState {
+  loading,
+  normal, // 숙제 목록 정상 표시
+  noAcademy, // 학원이 하나도 없음
+  error, // 기타 에러
+}
 
 /// 숙제 현황 페이지
 /// 할당된 숙제 목록과 제출 현황을 보여주는 페이지
@@ -16,13 +25,20 @@ class HomeworkStatusPage extends StatefulWidget {
 }
 
 class _HomeworkStatusPageState extends State<HomeworkStatusPage> {
-  final AssessmentRepository _assessmentRepository = AssessmentRepository();
-  final AcademyService _academyService = AcademyService();
-  final AuthService _authService = AuthService();
+  final getIt = GetIt.instance;
 
-  bool _isLoading = true;
+  late final AssessmentRepository _assessmentRepository =
+      getIt<AssessmentRepository>();
+  late final AcademyService _academyService = getIt<AcademyService>();
+  late final AuthService _authService = getIt<AuthService>();
+
+  HomeworkStatusViewState _viewState = HomeworkStatusViewState.loading;
   String? _errorMessage;
   List<HomeworkItem> _homeworks = [];
+
+  // Invariants:
+  // - when _viewState == HomeworkStatusViewState.error, _errorMessage != null (best-effort)
+  // - when _viewState == HomeworkStatusViewState.noAcademy, _homeworks is always empty
 
   @override
   Widget build(BuildContext context) {
@@ -51,60 +67,39 @@ class _HomeworkStatusPageState extends State<HomeworkStatusPage> {
     required List<HomeworkItem> pendingHomeworks,
     required List<HomeworkItem> completedHomeworks,
   }) {
-    if (_isLoading) {
+    if (_viewState == HomeworkStatusViewState.loading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_errorMessage != null) {
+    if (_viewState == HomeworkStatusViewState.error) {
       return Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 48, color: Color(0xFFF44336)),
-            const SizedBox(height: 16),
-            Text(
-              '숙제 정보를 불러오지 못했습니다.\n$_errorMessage',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'Pretendard',
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
-                color: Color(0xFF666666),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _loadAssessments,
-              child: const Text('다시 시도'),
-            ),
-          ],
+        child: Center(
+          child: EmptyStateMessage(
+            icon: Icons.error_outline,
+            title: '숙제 정보를 불러오지 못했습니다.',
+            description: _errorMessage,
+            primaryActionLabel: '다시 시도',
+            onPrimaryAction: _loadAssessments,
+          ),
         ),
       );
     }
 
+    if (_viewState == HomeworkStatusViewState.noAcademy) {
+      return const Center(
+        child: EmptyStateMessage.academy(
+          title: '등록된 학원이 없어요.',
+          description: '마이페이지에서 학원을 먼저 등록해주세요.',
+        ),
+      );
+    }
+
+    // 여기까지 왔으면 normal 상태
     if (_homeworks.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(
-              Icons.assignment_turned_in_outlined,
-              size: 48,
-              color: Color(0xFF999999),
-            ),
-            SizedBox(height: 16),
-            Text(
-              '등록된 숙제가 없습니다.',
-              style: TextStyle(
-                fontFamily: 'Pretendard',
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
-                color: Color(0xFF666666),
-              ),
-            ),
-          ],
+      return const Center(
+        child: EmptyStateMessage.homework(
+          title: '등록된 숙제가 없어요.',
         ),
       );
     }
@@ -377,7 +372,7 @@ class _HomeworkStatusPageState extends State<HomeworkStatusPage> {
 
   Future<void> _loadAssessments() async {
     setState(() {
-      _isLoading = true;
+      _viewState = HomeworkStatusViewState.loading;
       _errorMessage = null;
     });
 
@@ -412,7 +407,12 @@ class _HomeworkStatusPageState extends State<HomeworkStatusPage> {
         }
       }
       if (userAcademyId == null) {
-        throw Exception('학원 사용자 ID를 찾을 수 없습니다.');
+        // 등록된 학원이 전혀 없는 경우
+        setState(() {
+          _viewState = HomeworkStatusViewState.noAcademy;
+          _homeworks = [];
+        });
+        return;
       }
 
       final now = DateTime.now();
@@ -448,13 +448,13 @@ class _HomeworkStatusPageState extends State<HomeworkStatusPage> {
 
       setState(() {
         _homeworks = mapped;
-        _isLoading = false;
+        _viewState = HomeworkStatusViewState.normal;
       });
     } catch (e) {
       print('[HomeworkStatusPage] 숙제 데이터를 불러오지 못했습니다: $e');
       setState(() {
         _errorMessage = e.toString();
-        _isLoading = false;
+        _viewState = HomeworkStatusViewState.error;
       });
     }
   }

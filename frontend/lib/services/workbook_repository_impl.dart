@@ -4,7 +4,7 @@ import 'dart:convert';
 import '../domain/workbook/workbook_repository.dart';
 import '../domain/workbook/workbook_summary_entity.dart';
 import 'workbook_api.dart';
-import 'workbook_use_case.dart';
+import '../data/mappers/workbook_mapper.dart';
 import 'academy_service.dart';
 
 /// Workbook Repository 구현체
@@ -12,15 +12,15 @@ import 'academy_service.dart';
 /// API 호출, className 조회, 캐싱을 담당합니다.
 class WorkbookRepositoryImpl implements WorkbookRepository {
   WorkbookRepositoryImpl({
-    WorkbookApi? api,
-    WorkbookUseCase? useCase,
-    AcademyService? academyService,
-  }) : _api = api ?? WorkbookApi(),
-       _useCase = useCase ?? WorkbookUseCase(),
-       _academyService = academyService ?? AcademyService();
+    required WorkbookApi api,
+    required WorkbookMapper mapper,
+    required AcademyService academyService,
+  })  : _api = api,
+        _mapper = mapper,
+        _academyService = academyService;
 
   final WorkbookApi _api;
-  final WorkbookUseCase _useCase;
+  final WorkbookMapper _mapper;
   final AcademyService _academyService;
 
   static const String _cacheKeyPrefix = 'workbook_summaries_';
@@ -52,8 +52,8 @@ class WorkbookRepositoryImpl implements WorkbookRepository {
             : null;
       }
 
-      // 4. UseCase로 변환 (실제 classNameMap 전달)
-      final summariesMap = await _useCase.convertApiResponsesToSummaries(
+      // 4. Mapper로 변환 (실제 classNameMap 전달)
+      final summariesMap = await _mapper.convertApiResponsesToSummaries(
         apiResponses,
         classNameMap,
       );

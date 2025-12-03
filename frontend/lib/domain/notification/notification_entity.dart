@@ -72,16 +72,18 @@ class NotificationEntity {
 
   /// FCM RemoteMessage에서 생성
   factory NotificationEntity.fromRemoteMessage(RemoteMessage message) {
-    appLog('[notification:notification_entity] fromRemoteMessage 호출');
     appLog(
-      '[notification:notification_entity] 메시지 data: ${json.encode(message.data)}',
+      '[notification:notification_entity][timecheck] fromRemoteMessage 호출',
+    );
+    appLog(
+      '[notification:notification_entity][timecheck] 메시지 data: ${json.encode(message.data)}',
     );
     if (message.notification != null) {
       appLog(
-        '[notification:notification_entity] notification.title: ${message.notification!.title}',
+        '[notification:notification_entity][timecheck] notification.title: ${message.notification!.title}',
       );
       appLog(
-        '[notification:notification_entity] notification.body: ${message.notification!.body}',
+        '[notification:notification_entity][timecheck] notification.body: ${message.notification!.body}',
       );
     }
     appLog(

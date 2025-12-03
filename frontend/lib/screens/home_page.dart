@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import '../routes/app_routes.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_header_menu_button.dart';
@@ -6,9 +7,7 @@ import '../widgets/continuous_learning_widget_v2.dart';
 import '../services/assessment_repository.dart';
 import '../services/academy_service.dart';
 import '../services/auth_service.dart';
-import '../services/get_monthly_learning_status_use_case_impl.dart';
-import '../services/learning_completion_service_impl.dart';
-import '../services/grading_history_repository_impl.dart';
+import '../services/daily_learning_service.dart';
 import '../domain/learning/get_monthly_learning_status_use_case.dart';
 import '../models/assessment.dart';
 import '../utils/academy_utils.dart';
@@ -37,20 +36,17 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final AssessmentRepository _assessmentRepository = AssessmentRepository();
-  final AcademyService _academyService = AcademyService();
-  final AuthService _authService = AuthService();
+  final GetIt _getIt = GetIt.instance;
+
+  late final AssessmentRepository _assessmentRepository;
+  late final AcademyService _academyService;
+  late final AuthService _authService;
   final Map<String, List<Assessment>> _dateAssessments = {};
   DateTime _selectedDate = DateTime.now();
   bool _isLoadingAssessments = false;
 
-  // UseCase 인스턴스 (한 번만 생성)
-  // 필드 초기화에서 생성하여 initState 전에 접근 가능하도록 보장
-  final GetMonthlyLearningStatusUseCase _monthlyStatusUseCase = GetMonthlyLearningStatusUseCaseImpl(
-    assessmentRepository: AssessmentRepository(),
-    gradingHistoryRepository: GradingHistoryRepositoryImpl(),
-    completionService: const LearningCompletionServiceImpl(),
-  );
+  // UseCase 인스턴스 (DI에서 주입)
+  late final GetMonthlyLearningStatusUseCase _monthlyStatusUseCase;
 
   // 숙제 완료 상태 관리 (UI 상태용)
   final Map<String, bool> _homeworkStatus = {};
@@ -60,13 +56,17 @@ class _HomePageState extends State<HomePage> {
   String _academyName = '학원';
   List<UserAcademyResponse> _registeredAcademies = []; // 등록완료된 학원 목록
 
-  // 헬퍼 getter
-  bool get _hasAcademy => _academyState == AcademyState.ready;
-  bool get _isCheckingAcademy => _academyState == AcademyState.loading;
+  // 선택된 날짜의 학습 데이터
+  DailyLearningResult? _selectedDateLearningResult;
+  bool _isLoadingSelectedDateLearning = false;
 
   @override
   void initState() {
     super.initState();
+    _assessmentRepository = _getIt<AssessmentRepository>();
+    _academyService = _getIt<AcademyService>();
+    _authService = _getIt<AuthService>();
+    _monthlyStatusUseCase = _getIt<GetMonthlyLearningStatusUseCase>();
     _academyService.defaultAcademyVersion.addListener(_onDefaultAcademyChanged);
     // 단일 진입점만 호출
     _initializeAcademyData(forceRefresh: false);
@@ -262,43 +262,14 @@ class _HomePageState extends State<HomePage> {
 
       // 4. Assessment 데이터 로드
       await _loadRemainingMonthData();
+
+      // 5. 선택된 날짜의 학습 데이터 로드
+      await _loadSelectedDateLearningData(_selectedDate);
     }
   }
 
-  /// 학원명만 다시 로드 (외부에서 defaultAcademyCode가 변경된 경우에만 사용)
-  ///
-  /// 주의: 초기화 시에는 _initializeAcademyData를 사용하세요.
-  /// 이 메서드는 "이미 초기화된 상태에서 코드만 바뀐 경우"에만 사용합니다.
-  Future<void> _loadAcademyName() async {
-    try {
-      final academyCode = await _academyService.getDefaultAcademyCode();
-      if (academyCode == null) {
-        if (mounted) {
-          setState(() {
-            _academyState = AcademyState.none;
-          });
-        }
-        return;
-      }
-
-      // 메모리 우선 확인 (null-aware 연산자 활용)
-      UserAcademyResponse? academy = _registeredAcademies
-          .where((a) => a.academyCode == academyCode)
-          .firstOrNull;
-
-      // 메모리에 없으면 캐시에서 찾기
-      academy ??= await _academyService.getAcademyByCode(academyCode);
-
-      if (academy != null && mounted) {
-        setState(() {
-          _academyName = academy!.academyName;
-          // _academyState는 변경하지 않음 (이미 ready 상태일 것으로 가정)
-        });
-      }
-    } catch (e) {
-      developer.log('⚠️ 학원명 로드 실패: $e');
-    }
-  }
+  // _loadAcademyName, _hasAcademy, _isCheckingAcademy는
+  // 이전 구조에서 사용되었으나 현재 로직에서는 사용되지 않아 제거했습니다.
 
   /// 이번 달과 다음 달 데이터 로드
   ///
@@ -333,15 +304,20 @@ class _HomePageState extends State<HomePage> {
       // 현재 달의 첫 번째 날 (UTC)
       final currentMonthStart = DateTime.utc(now.year, now.month, 1);
 
-      // 다음 달 계산 (set 함수 사용)
+      // 이전/다음 달 계산 (set 함수 사용)
+      final previousMonthStart = _getPreviousMonth(currentMonthStart);
       final nextMonthStart = _getNextMonth(currentMonthStart);
 
       // 캐시 초기화 (메모리 캐시와 SharedPreferences)
       await _assessmentRepository.clearAll();
       developer.log('🔄 [HomePage] Assessment 캐시 초기화 완료');
 
-      // 현재 달과 다음 달 데이터를 병렬로 가져오기
+      // 이전 달, 현재 달, 다음 달 데이터를 병렬로 가져오기
       final results = await Future.wait([
+        _assessmentRepository.getForMonth(
+          academyId: userAcademyId,
+          dateTime: previousMonthStart,
+        ),
         _assessmentRepository.getForMonth(
           academyId: userAcademyId,
           dateTime: currentMonthStart,
@@ -352,13 +328,14 @@ class _HomePageState extends State<HomePage> {
         ),
       ]);
 
-      // 두 달의 데이터를 합치기
+      // 세 달의 데이터를 합치기
       setState(() {
-        _dateAssessments.addAll(results[0]);
-        _dateAssessments.addAll(results[1]);
+        _dateAssessments.addAll(results[0]); // 이전 달
+        _dateAssessments.addAll(results[1]); // 현재 달
+        _dateAssessments.addAll(results[2]); // 다음 달
       });
 
-      developer.log('✅ [HomePage] 이번 달과 다음 달 Assessment 데이터 로드 완료');
+      developer.log('✅ [HomePage] 이전/이번/다음 달 Assessment 데이터 로드 완료');
       developer.log('📊 [HomePage] 현재 _dateAssessments 상태:');
 
       _dateAssessments.forEach((date, assessments) {
@@ -387,6 +364,15 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 이전 달 계산 헬퍼 함수
+  DateTime _getPreviousMonth(DateTime dateTime) {
+    if (dateTime.month == 1) {
+      return DateTime.utc(dateTime.year - 1, 12, 1);
+    } else {
+      return DateTime.utc(dateTime.year, dateTime.month - 1, 1);
+    }
+  }
+
   /// 날짜 선택 시 호출
   void _onDateSelected(DateTime date) {
     setState(() {
@@ -398,6 +384,9 @@ class _HomePageState extends State<HomePage> {
     if (!_dateAssessments.containsKey(dateStr)) {
       _loadDateData(date);
     }
+
+    // 선택된 날짜의 학습 데이터 로드
+    _loadSelectedDateLearningData(date);
   }
 
   /// 특정 날짜 데이터 로드
@@ -437,6 +426,44 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _dateAssessments[dateStr] = [];
       });
+    }
+  }
+
+  /// 선택된 날짜의 학습 데이터 로드
+  ///
+  /// [date]: 조회할 날짜 (어떤 타임존이든 상관없음, KST로 변환됨)
+  /// 기기 타임존과 무관하게 항상 KST 기준으로 조회됩니다.
+  Future<void> _loadSelectedDateLearningData(DateTime date) async {
+    if (_isLoadingSelectedDateLearning) return;
+    if (_academyState != AcademyState.ready) return;
+
+    // setState 한 번만 호출
+    setState(() {
+      _isLoadingSelectedDateLearning = true;
+      _selectedDateLearningResult = null; // 이전 결과 초기화
+    });
+
+    try {
+      final learningService = _getIt<DailyLearningService>();
+      final result = await learningService.getDailyLearningData(date);
+
+      // setState 한 번만 호출 (성공/실패 모두)
+      if (mounted) {
+        setState(() {
+          _selectedDateLearningResult = result;
+          _isLoadingSelectedDateLearning = false;
+        });
+      }
+    } catch (e) {
+      developer.log('⚠️ 선택된 날짜의 학습 데이터 로드 실패: $e');
+      if (mounted) {
+        setState(() {
+          _selectedDateLearningResult = DailyLearningResult.error(
+            '데이터를 불러오는데 실패했습니다.',
+          );
+          _isLoadingSelectedDateLearning = false;
+        });
+      }
     }
   }
 
@@ -496,29 +523,36 @@ class _HomePageState extends State<HomePage> {
         return _buildErrorState();
 
       case AcademyState.ready:
-        return SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(height: screenHeight * 0.0297), // 26px → 2.97%
-              ContinuousLearningWidgetV2(
-                consecutiveDays: _getConsecutiveDays(),
-                homeworkDeadlines: _getHomeworkDeadlines(),
-                onDateSelected: _onDateSelected,
-                selectedDate: _selectedDate,
-                // 새 구조: UseCase 사용
-                monthlyStatusUseCase: _monthlyStatusUseCase,
-                // 하위 호환성 (추후 제거 예정)
-                completedDates: _getCompletedDates(),
-                dateAssessments: _dateAssessments,
-              ),
-              SizedBox(height: screenHeight * 0.0297), // 26px → 2.97%
-              _buildTodayHomeworkSection(),
-              SizedBox(height: screenHeight * 0.0297), // 26px → 2.97%
-              _buildAccumulatedLearningSection(),
-              const SizedBox(height: 20),
-            ],
+        return RefreshIndicator(
+          onRefresh: () async {
+            await _initializeAcademyData(forceRefresh: true);
+          },
+          child: SingleChildScrollView(
+            physics:
+                const AlwaysScrollableScrollPhysics(), // Pull-to-refresh를 위해 항상 스크롤 가능하도록
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(height: screenHeight * 0.0297), // 26px → 2.97%
+                ContinuousLearningWidgetV2(
+                  consecutiveDays: _getConsecutiveDays(),
+                  homeworkDeadlines: _getHomeworkDeadlines(),
+                  onDateSelected: _onDateSelected,
+                  selectedDate: _selectedDate,
+                  // 새 구조: UseCase 사용
+                  monthlyStatusUseCase: _monthlyStatusUseCase,
+                  // 하위 호환성 (추후 제거 예정)
+                  completedDates: _getCompletedDates(),
+                  dateAssessments: _dateAssessments,
+                ),
+                SizedBox(height: screenHeight * 0.0297), // 26px → 2.97%
+                _buildTodayHomeworkSection(),
+                SizedBox(height: screenHeight * 0.0297), // 26px → 2.97%
+                _buildAccumulatedLearningSection(),
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         );
     }
@@ -573,12 +607,28 @@ class _HomePageState extends State<HomePage> {
     // ✅ Rule 1: 아이콘 사이즈도 상대 크기로
     final iconSize = MediaQuery.of(context).size.width * 0.06;
 
-    // 학원이 2개 이상일 때만 드롭다운 활성화
-    final canShowDropdown = _registeredAcademies.length > 1;
+    // 학원이 정상적으로 설정된 상태인지 여부
+    final hasAcademy =
+        _academyState == AcademyState.ready && _registeredAcademies.isNotEmpty;
+
+    // 학원이 2개 이상일 때만 드롭다운 활성화 (단, 학원이 있을 때만)
+    final canShowDropdown = hasAcademy && _registeredAcademies.length > 1;
 
     return AppHeader(
-      titleAlignment: 'left',
-      title: canShowDropdown
+      titleAlignment: hasAcademy ? 'left' : 'center',
+      title: !hasAcademy
+          // 학원이 없을 때는 학원 이름("Gradi 학원" 등)을 표시하지 않고
+          // 단순히 홈 타이틀만 표시
+          ? const Text(
+              '홈',
+              style: TextStyle(
+                fontFamily: 'Pretendard',
+                fontWeight: FontWeight.w700,
+                fontSize: 20,
+                color: Color(0xFF333333),
+              ),
+            )
+          : canShowDropdown
           ? PopupMenuButton<String>(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1121,12 +1171,54 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildLearningProgressCard() {
-    // 선택된 날짜의 Assessment 데이터 가져오기
-    final dateStr = _formatDate(_selectedDate);
-    final assessments = _dateAssessments[dateStr] ?? [];
+    // 로딩 중
+    if (_isLoadingSelectedDateLearning) {
+      return Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FA),
+          border: Border.all(color: const Color(0xFFE1E7ED)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
 
-    // Assessment가 없으면 빈 상태 표시
-    if (assessments.isEmpty) {
+    // 결과가 없음
+    if (_selectedDateLearningResult == null) {
+      return const SizedBox.shrink();
+    }
+
+    // 에러 상태
+    if (_selectedDateLearningResult!.hasError) {
+      return Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FA),
+          border: Border.all(color: const Color(0xFFE1E7ED)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.error_outline, color: Color(0xFFFF6B6B)),
+            const SizedBox(height: 8),
+            Text(
+              _selectedDateLearningResult!.errorMessage ?? '데이터를 불러오는데 실패했습니다.',
+              style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                color: Color(0xFFFF6B6B),
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 빈 상태 (학습 기록 없음)
+    if (!_selectedDateLearningResult!.hasData) {
       return Container(
         padding: const EdgeInsets.all(15),
         decoration: BoxDecoration(
@@ -1148,24 +1240,38 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    // 완료된 Assessment 중 첫 번째 선택, 없으면 첫 번째 Assessment 사용
-    Assessment? completedAssessment;
-    try {
-      completedAssessment = assessments.firstWhere(
-        (a) => a.assessStatus == 'Y',
+    // 데이터 있음 - 가장 많이 학습한 책 선택
+    final books = DailyLearningService.extractBooks(
+      _selectedDateLearningResult!,
+    );
+    final selectedBook = DailyLearningService.selectMostLearnedBook(books);
+
+    if (selectedBook == null) {
+      return Container(
+        padding: const EdgeInsets.all(15),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8F9FA),
+          border: Border.all(color: const Color(0xFFE1E7ED)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Center(
+          child: Text(
+            '학습 데이터를 표시할 수 없습니다.',
+            style: TextStyle(
+              fontFamily: 'Pretendard',
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              color: Color(0xFF999999),
+            ),
+          ),
+        ),
       );
-    } catch (e) {
-      // 완료된 것이 없으면 첫 번째 Assessment 사용
-      completedAssessment = assessments.first;
     }
 
-    // TODO: 실제 페이지 진행률 계산 (현재는 더미 데이터)
-    const currentPage = 148;
-    const totalPages = 300;
-    const todayPages = 25;
-
-    final previousProgress = (currentPage - todayPages) / totalPages;
-    final currentProgress = currentPage / totalPages;
+    // Progress 계산
+    final progress = selectedBook.bookPage > 0
+        ? selectedBook.totalSolvedPages / selectedBook.bookPage
+        : 0.0;
 
     final screenWidth = MediaQuery.of(context).size.width;
     final thumbnailWidth = screenWidth * 0.17;
@@ -1184,9 +1290,11 @@ class _HomePageState extends State<HomePage> {
           // 문제집 썸네일
           ClipRRect(
             borderRadius: BorderRadius.circular(5),
-            child: completedAssessment.bookCoverImage.startsWith('http')
+            child:
+                selectedBook.bookImageUrl != null &&
+                    selectedBook.bookImageUrl!.startsWith('http')
                 ? Image.network(
-                    completedAssessment.bookCoverImage,
+                    selectedBook.bookImageUrl!,
                     width: thumbnailWidth,
                     height: thumbnailHeight,
                     fit: BoxFit.cover,
@@ -1203,23 +1311,15 @@ class _HomePageState extends State<HomePage> {
                       );
                     },
                   )
-                : Image.asset(
-                    completedAssessment.bookCoverImage,
+                : Container(
                     width: thumbnailWidth,
                     height: thumbnailHeight,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: thumbnailWidth,
-                        height: thumbnailHeight,
-                        color: Colors.grey[300],
-                        child: Icon(
-                          Icons.book,
-                          color: Colors.grey,
-                          size: thumbnailWidth * 0.57,
-                        ),
-                      );
-                    },
+                    color: Colors.grey[300],
+                    child: Icon(
+                      Icons.book,
+                      color: Colors.grey,
+                      size: thumbnailWidth * 0.57,
+                    ),
                   ),
           ),
           const SizedBox(width: 15),
@@ -1229,9 +1329,9 @@ class _HomePageState extends State<HomePage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 문제집명 (bookId 표시 또는 추후 bookName 필드 추가)
+                // 문제집명
                 Text(
-                  '문제집 ${completedAssessment.bookId}',
+                  selectedBook.bookName ?? '문제집 ${selectedBook.bookId}',
                   style: const TextStyle(
                     fontFamily: 'Pretendard',
                     fontWeight: FontWeight.w700,
@@ -1239,21 +1339,9 @@ class _HomePageState extends State<HomePage> {
                     color: Color(0xFF333333),
                   ),
                 ),
-                const SizedBox(height: 4),
-
-                // 숙제 이름
-                Text(
-                  completedAssessment.assessName,
-                  style: const TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontWeight: FontWeight.w500,
-                    fontSize: 12,
-                    color: Color(0xFF666666),
-                  ),
-                ),
                 const SizedBox(height: 12),
 
-                // 2단계 프로그레스 바
+                // 프로그레스 바
                 LayoutBuilder(
                   builder: (context, constraints) {
                     final progressHeight = constraints.maxWidth * 0.04;
@@ -1267,20 +1355,9 @@ class _HomePageState extends State<HomePage> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        // 기존 누적 진행률 (보라색)
+                        // 진행률 (보라색)
                         FractionallySizedBox(
-                          widthFactor: previousProgress,
-                          child: Container(
-                            height: progressHeight,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFAC5BF8).withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                        // 오늘 추가 분량 (진한 보라색)
-                        FractionallySizedBox(
-                          widthFactor: currentProgress,
+                          widthFactor: progress.clamp(0.0, 1.0),
                           child: Container(
                             height: progressHeight,
                             decoration: BoxDecoration(
@@ -1299,22 +1376,12 @@ class _HomePageState extends State<HomePage> {
 
                 // 진행 정보
                 Text(
-                  _formatAssessPage(completedAssessment.assessPage),
+                  '${selectedBook.totalSolvedPages} / ${selectedBook.bookPage} 페이지',
                   style: const TextStyle(
                     fontFamily: 'Pretendard',
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                     color: Color(0xFF333333),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '상태: ${_getStatusText(completedAssessment.assessStatus)}',
-                  style: const TextStyle(
-                    fontFamily: 'Pretendard',
-                    fontWeight: FontWeight.w500,
-                    fontSize: 12,
-                    color: Color(0xFF666666),
                   ),
                 ),
               ],
@@ -1351,15 +1418,5 @@ class _HomePageState extends State<HomePage> {
     }
 
     return streak;
-  }
-
-  String _getStatusText(String status) {
-    // assessStatus는 'N' 또는 'Y'
-    if (status == 'Y') {
-      return '완료';
-    } else if (status == 'N') {
-      return '미완료';
-    }
-    return '알 수 없음';
   }
 }

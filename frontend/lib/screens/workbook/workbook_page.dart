@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_header_title.dart';
 import '../../widgets/app_header_menu_button.dart';
+import '../../widgets/empty_state_message.dart';
 import '../../services/academy_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/workbook_repository_impl.dart';
-import '../../services/workbook_use_case.dart';
+import '../../data/mappers/workbook_mapper.dart';
 import 'models/class_data.dart';
 import 'models/workbook_info.dart';
 import 'models/workbook_data.dart';
@@ -26,11 +28,13 @@ class WorkbookPage extends StatefulWidget {
 class _WorkbookPageState extends State<WorkbookPage> {
   WorkbookViewType _currentView = WorkbookViewType.byClass;
 
-  // Services
-  final AuthService _authService = AuthService();
-  final AcademyService _academyService = AcademyService();
-  final WorkbookRepositoryImpl _workbookRepository = WorkbookRepositoryImpl();
-  final WorkbookUseCase _workbookUseCase = WorkbookUseCase();
+  final GetIt _getIt = GetIt.instance;
+
+  // Services (DI에서 주입)
+  late final AuthService _authService;
+  late final AcademyService _academyService;
+  late final WorkbookRepositoryImpl _workbookRepository;
+  late final WorkbookMapper _workbookMapper;
 
   // Data
   List<ClassData> _classData = [];
@@ -43,6 +47,10 @@ class _WorkbookPageState extends State<WorkbookPage> {
   @override
   void initState() {
     super.initState();
+    _authService = _getIt<AuthService>();
+    _academyService = _getIt<AcademyService>();
+    _workbookRepository = _getIt<WorkbookRepositoryImpl>();
+    _workbookMapper = _getIt<WorkbookMapper>();
     _loadWorkbooks();
   }
 
@@ -105,9 +113,9 @@ class _WorkbookPageState extends State<WorkbookPage> {
       final summariesMap = await _workbookRepository
           .getWorkbookSummariesByAcademyUserIds(academyUserIds);
 
-      // 3. UseCase로 UI 모델 변환
-      final classData = _workbookUseCase.convertToClassData(summariesMap);
-      final workbookData = _workbookUseCase.convertToWorkbookData(summariesMap);
+      // 3. Mapper로 UI 모델 변환
+      final classData = _workbookMapper.convertToClassData(summariesMap);
+      final workbookData = _workbookMapper.convertToWorkbookData(summariesMap);
 
       // 4. UI 업데이트
       setState(() {
@@ -135,40 +143,46 @@ class _WorkbookPageState extends State<WorkbookPage> {
             // 헤더
             _buildHeader(),
 
-            // 메인 콘텐츠 (스크롤 가능)
+            // 메인 콘텐츠 (스크롤 가능 + Pull-to-refresh)
             Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: MediaQuery.of(context).size.width * 0.05,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      height: MediaQuery.of(context).size.height * 0.032,
-                    ),
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  await _loadWorkbooks(forceRefresh: true);
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(), // Pull-to-refresh를 위해 항상 스크롤 가능하도록
+                  padding: EdgeInsets.symmetric(
+                    horizontal: MediaQuery.of(context).size.width * 0.05,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        height: MediaQuery.of(context).size.height * 0.032,
+                      ),
 
-                    // 토글 버튼
-                    _buildToggle(),
+                      // 토글 버튼
+                      _buildToggle(),
 
-                    Container(
-                      height: MediaQuery.of(context).size.height * 0.01,
-                    ),
+                      Container(
+                        height: MediaQuery.of(context).size.height * 0.01,
+                      ),
 
-                    // 메인 콘텐츠
-                    _isLoading
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(40.0),
-                              child: CircularProgressIndicator(),
-                            ),
-                          )
-                        : _errorMessage != null
-                        ? _buildErrorState()
-                        : _currentView == WorkbookViewType.byClass
-                        ? _buildClassView()
-                        : _buildWorkbookView(),
-                  ],
+                      // 메인 콘텐츠
+                      _isLoading
+                          ? const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(40.0),
+                                child: CircularProgressIndicator(),
+                              ),
+                            )
+                          : _errorMessage != null
+                          ? _buildErrorState()
+                          : _currentView == WorkbookViewType.byClass
+                          ? _buildClassView()
+                          : _buildWorkbookView(),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -283,7 +297,16 @@ class _WorkbookPageState extends State<WorkbookPage> {
 
   Widget _buildClassView() {
     if (_classData.isEmpty) {
-      return const SizedBox.shrink();
+      final screenHeight = MediaQuery.of(context).size.height;
+      return SizedBox(
+        height: screenHeight * 0.6,
+        child: const Center(
+          child: EmptyStateMessage.classRoom(
+            title: '등록된 클래스가 없어요.',
+            description: '학원에서 클래스를 배정해주면 이곳에 표시돼요.',
+          ),
+        ),
+      );
     }
 
     return Column(
@@ -425,6 +448,15 @@ class _WorkbookPageState extends State<WorkbookPage> {
   }
 
   Widget _buildWorkbookView() {
+    if (_workbookData.isEmpty) {
+      return const Center(
+        child: EmptyStateMessage.workbook(
+          title: '현재 등록된 문제집이 없어요.',
+          description: '선생님이 문제집을 배정하면 이곳에 표시돼요.',
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

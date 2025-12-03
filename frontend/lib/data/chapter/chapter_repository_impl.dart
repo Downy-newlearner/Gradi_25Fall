@@ -7,9 +7,7 @@ import 'chapter_api.dart';
 ///
 /// API 호출 및 DTO → Entity 변환을 담당합니다.
 class ChapterRepositoryImpl implements ChapterRepository {
-  ChapterRepositoryImpl({
-    ChapterApi? api,
-  }) : _api = api ?? ChapterApi();
+  ChapterRepositoryImpl({required ChapterApi api}) : _api = api;
 
   final ChapterApi _api;
 
@@ -22,19 +20,23 @@ class ChapterRepositoryImpl implements ChapterRepository {
       final apiResponses = await _api.fetchChapters(bookId, academyUserId);
 
       // API 응답 → 도메인 엔티티 변환
-      return apiResponses.map((response) => ChapterEntity(
-            chapterId: response.chapterId,
-            bookId: response.bookId,
-            mainChapterNumber: response.mainChapterNumber,
-            subChapterNumber: response.subChapterNumber,
-            chapterName: response.chapterName,
-            chapterStartPage: response.chapterStartPage,
-            chapterEndPage: response.chapterEndPage,
-            chapterStartQuestion: response.chapterStartQuestion,
-            chapterEndQuestion: response.chapterEndQuestion,
-            totalChapterQuestion: response.totalChapterQuestion,
-            studentAnswerCount: response.studentAnswerCount,
-          )).toList();
+      return apiResponses
+          .map(
+            (response) => ChapterEntity(
+              chapterId: response.chapterId,
+              bookId: response.bookId,
+              mainChapterNumber: response.mainChapterNumber,
+              subChapterNumber: response.subChapterNumber,
+              chapterName: response.chapterName,
+              chapterStartPage: response.chapterStartPage,
+              chapterEndPage: response.chapterEndPage,
+              chapterStartQuestion: response.chapterStartQuestion,
+              chapterEndQuestion: response.chapterEndQuestion,
+              totalChapterQuestion: response.totalChapterQuestion,
+              studentAnswerCount: response.studentAnswerCount,
+            ),
+          )
+          .toList();
     } catch (e) {
       developer.log('❌ [ChapterRepository] API 호출 실패: $e');
       rethrow;
@@ -66,4 +68,3 @@ class ChapterRepositoryImpl implements ChapterRepository {
     }
   }
 }
-

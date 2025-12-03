@@ -81,9 +81,11 @@ class ChapterApiResponse {
 
 /// 챕터 API 호출 전용 레이어
 class ChapterApi {
-  ChapterApi({AuthService? authService, http.Client? httpClient})
-    : _authService = authService ?? AuthService(),
-        _httpClient = httpClient ?? http.Client();
+  ChapterApi({
+    required AuthService authService,
+    required http.Client httpClient,
+  })  : _authService = authService,
+        _httpClient = httpClient;
 
   final AuthService _authService;
   final http.Client _httpClient;

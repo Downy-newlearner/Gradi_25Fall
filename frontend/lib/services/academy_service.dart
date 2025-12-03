@@ -6,13 +6,15 @@ import 'auth_service.dart';
 import '../config/api_config.dart';
 import '../utils/app_logger.dart';
 
+/// 학원 관련 API 호출 및 캐싱을 담당하는 서비스
+///
+/// DI Container에서 singleton으로 관리되며,
+/// AuthService는 생성자 주입을 통해 전달됩니다.
 class AcademyService {
-  static final AcademyService _instance = AcademyService._internal();
-  factory AcademyService() => _instance;
-  AcademyService._internal();
+  final AuthService _authService;
 
-  // ApiConfig에서 서버 URL 가져오기
-  final AuthService _authService = AuthService();
+  AcademyService({AuthService? authService})
+    : _authService = authService ?? AuthService();
 
   // SharedPreferences 키
   static const String _academiesCacheKey = 'user_academies_cache';
@@ -36,10 +38,10 @@ class AcademyService {
         throw Exception('인증 토큰이 없습니다. 로그인이 필요합니다.');
       }
 
-      // API 엔드포인트 구성 (radius, page, size는 0으로 고정 - 백엔드에서 디폴트값 사용)
+      // API 엔드포인트 구성 (radius, page, size는 백엔드 디폴트값 사용)
+      // 에뮬레이터/실기기에서 전달받은 현재 위치(lat, lng)를 그대로 사용
       final uri = Uri.parse(
-        // '${ApiConfig.baseUrl}/academy/nearby?lat=$latitude&lng=$longitude',
-        '${ApiConfig.baseUrl}/academy/nearby?lat=37.3215&lng=127.1234', // 테스트용 예시 좌표
+        '${ApiConfig.baseUrl}/academy/nearby?lat=$latitude&lng=$longitude',
       );
 
       // API 호출
@@ -131,6 +133,9 @@ class AcademyService {
       final requestBody = json.encode({
         'academy': {'academy_code': academy_id},
         'user_id': user_id,
+        // TODO: 실제 클래스 연동 시 서버 스키마에 맞게 값 교체
+        // 현재는 항상 0을 전달 (백엔드 기본 반/전체 반 등 처리용)
+        'class_id': 0,
       });
 
       final response = await http.post(

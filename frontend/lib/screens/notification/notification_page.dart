@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_header_title.dart';
 import '../../widgets/app_header_menu_button.dart';
@@ -7,7 +8,8 @@ import '../../domain/notification/notification_type.dart';
 import '../../data/notification/notification_local_data_source.dart';
 import '../../data/notification/notification_repository_impl.dart';
 import '../../application/notification/notification_notifier.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../routes/app_routes.dart';
+import '../workbook/chapter_detail_page.dart' show QuestionStatus;
 
 /// 알림 페이지
 /// 학습 관련 알림, 숙제 마감 알림, 학원 공지사항 등을 표시하는 페이지
@@ -207,7 +209,7 @@ class _NotificationPageState extends State<NotificationPage> {
           child: InkWell(
             onTap: () {
               _markAsRead(notification);
-              // TODO: 알림 상세 페이지로 이동 또는 관련 페이지로 이동
+              _handleNotificationTap(notification);
             },
             borderRadius: BorderRadius.circular(12),
             child: Container(
@@ -387,5 +389,107 @@ class _NotificationPageState extends State<NotificationPage> {
     } else {
       return '${time.year}.${time.month.toString().padLeft(2, '0')}.${time.day.toString().padLeft(2, '0')}';
     }
+  }
+
+  void _handleNotificationTap(NotificationEntity notification) {
+    // 해설 생성 완료 알림인 경우, 해당 문제 상세 페이지로 이동
+    if (notification.title == '해설 생성 완료' && notification.data != null) {
+      final data = notification.data!;
+
+      try {
+        int? _toInt(dynamic value) {
+          if (value is int) return value;
+          if (value is String) return int.tryParse(value);
+          return null;
+        }
+
+        bool? _toBool(dynamic value) {
+          if (value is bool) return value;
+          if (value is String) {
+            final lower = value.toLowerCase();
+            if (lower == 'true') return true;
+            if (lower == 'false') return false;
+          }
+          return null;
+        }
+
+        // 해설 생성 완료 알림 payload 예시:
+        // {
+        //   "student_response_id": 1764510387709,
+        //   "user_id": 1,
+        //   "chapter_id": 201,
+        //   "academy_user_id": 20,
+        //   "book_id": 1,
+        //   "question_number": 1,
+        //   "sub_question_number": 0,
+        //   "is_correct": false,
+        //   "score": 1
+        // }
+
+        final studentResponseId = _toInt(data['student_response_id']);
+        final academyUserId = _toInt(data['academy_user_id']);
+        final questionNumber = _toInt(data['question_number']);
+        // sub_question_number, book_id, score 등은 현재 화면 이동에는 사용하지 않지만
+        // payload 구조 검증 및 향후 확장을 위해 한 번 읽어둡니다.
+        _toInt(data['sub_question_number']);
+        _toInt(data['book_id']);
+        _toInt(data['score']);
+        final chapterIdFromPayload = _toInt(data['chapter_id']);
+        final isCorrect = _toBool(data['is_correct']);
+
+        if (studentResponseId == null ||
+            academyUserId == null ||
+            questionNumber == null ||
+            isCorrect == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('문제 정보가 부족하여 화면으로 이동할 수 없습니다.')),
+          );
+          return;
+        }
+
+        // 정답/오답 여부를 QuestionStatus로 매핑
+        final status = isCorrect
+            ? QuestionStatus.correct
+            : QuestionStatus.incorrect;
+
+        // 알림 body에서 클래스/문제집 이름 추출 (예: "[고급수학반] 수업의 [기초수학교재] 3번 문제 해설 생성 완료")
+        final body = notification.message;
+        final matches = RegExp(r'\[(.*?)\]').allMatches(body).toList();
+        final academyName = matches.isNotEmpty
+            ? matches[0].group(1) ?? '학원'
+            : '학원';
+        final workbookName = matches.length > 1
+            ? matches[1].group(1) ?? '문제집'
+            : '문제집';
+
+        // chapterId는 payload에서 넘어온 값을 사용하되,
+        // 문제가 있을 경우에는 0으로 fallback 합니다.
+        final chapterId = chapterIdFromPayload ?? 0;
+        // chapterName은 헤더 표시용으로만 사용
+        final chapterName = '$academyName 수업';
+
+        Navigator.pushNamed(
+          context,
+          AppRoutes.questionDetail,
+          arguments: {
+            'chapterId': chapterId,
+            'academyUserId': academyUserId,
+            'workbookName': workbookName,
+            'chapterName': chapterName,
+            'questionNumber': questionNumber,
+            'status': status,
+            'studentResponseId': studentResponseId,
+          },
+        );
+        return;
+      } catch (_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('알림 데이터 형식이 올바르지 않아 이동에 실패했습니다.')),
+        );
+        return;
+      }
+    }
+
+    // 그 외 알림은 현재 별도 동작 없음 (읽음 처리만 수행)
   }
 }

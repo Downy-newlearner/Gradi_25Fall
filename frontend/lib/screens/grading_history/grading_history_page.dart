@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_header_title.dart';
 import '../../widgets/back_button.dart';
@@ -31,15 +32,20 @@ class _GradingHistoryPageState extends State<GradingHistoryPage> {
   List<GradingHistoryItem> _historyItems = [];
   String? _errorMessage;
 
-  // Services
-  final AuthService _authService = AuthService();
-  final AcademyService _academyService = AcademyService();
-  final GradingHistoryRepositoryImpl _repository =
-      GradingHistoryRepositoryImpl();
+  // DI
+  final GetIt _getIt = GetIt.instance;
+
+  // Services (DI에서 주입)
+  late final AuthService _authService;
+  late final AcademyService _academyService;
+  late final GradingHistoryRepositoryImpl _repository;
 
   @override
   void initState() {
     super.initState();
+    _authService = _getIt<AuthService>();
+    _academyService = _getIt<AcademyService>();
+    _repository = _getIt<GradingHistoryRepositoryImpl>();
     _loadGradingHistory();
   }
 
@@ -327,22 +333,20 @@ class _GradingHistoryPageState extends State<GradingHistoryPage> {
 
     return GestureDetector(
       onTap: () {
-        // AppDependencies에서 UseCase 가져오기
-        final getStudentAnswersUseCase =
-            AppDependencies.getStudentAnswersForResponseUseCase;
-        final updateStudentAnswersUseCase =
-            AppDependencies.updateStudentAnswersUseCase;
-        final getSectionImageUseCase = AppDependencies.getSectionImageUseCase;
-
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => EditGradingResultPage(
               studentResponseId: item.studentResponseId,
               academyUserId: item.academyUserId,
-              getStudentAnswersUseCase: getStudentAnswersUseCase,
-              updateStudentAnswersUseCase: updateStudentAnswersUseCase,
-              getSectionImageUseCase: getSectionImageUseCase,
+              getStudentAnswersUseCase:
+                  AppDependencies.getStudentAnswersForResponseUseCase,
+              updateStudentAnswersUseCase:
+                  AppDependencies.updateStudentAnswersUseCase,
+              getSectionImageUseCase:
+                  AppDependencies.getSectionImageUseCase,
+              updateSingleStudentAnswerUseCase:
+                  AppDependencies.updateSingleStudentAnswerUseCase,
             ),
           ),
         );

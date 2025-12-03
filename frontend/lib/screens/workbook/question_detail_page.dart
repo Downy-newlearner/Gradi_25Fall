@@ -6,6 +6,9 @@ import '../../domain/student_answer/student_answer_query.dart';
 import '../../domain/section_image/get_section_image_use_case.dart';
 import '../../config/app_dependencies.dart';
 import '../../utils/app_logger.dart';
+import '../../domain/question/question_identifier.dart';
+import '../../domain/explanation/explanation_source.dart';
+import '../../application/explanation/question_explanation_controller.dart';
 
 /// 문제 상세 페이지
 /// ChapterDetailPage에서 문제를 선택하면 표시되는 페이지
@@ -24,8 +27,10 @@ class QuestionDetailPage extends StatefulWidget {
   final String chapterName;
   final int questionNumber;
   final QuestionStatus status;
+  final int? initialStudentResponseId;
   final StudentAnswerRepository studentAnswerRepository;
   final GetSectionImageUseCase getSectionImageUseCase;
+  final QuestionExplanationController explanationController;
 
   QuestionDetailPage({
     super.key,
@@ -35,8 +40,10 @@ class QuestionDetailPage extends StatefulWidget {
     required this.chapterName,
     required this.questionNumber,
     required this.status,
+    this.initialStudentResponseId,
     StudentAnswerRepository? studentAnswerRepository,
     GetSectionImageUseCase? getSectionImageUseCase,
+    required this.explanationController,
   }) : studentAnswerRepository =
            studentAnswerRepository ?? AppDependencies.studentAnswerRepository,
        getSectionImageUseCase =
@@ -47,6 +54,9 @@ class QuestionDetailPage extends StatefulWidget {
 }
 
 class _QuestionDetailPageState extends State<QuestionDetailPage> {
+  ExplanationSource? _explanationSource;
+  bool _hasShownRequestSuccessPopup = false;
+
   /// Section 이미지 URL
   String? _sectionImageUrl;
   bool _isLoadingImage = false;
@@ -65,7 +75,7 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
 
   /// Section 이미지 로드
   ///
-  /// chapterId, academyUserId, questionNumber로 답안을 조회하여
+  /// chapterId + academyUserId 또는 studentResponseId로 답안을 조회하여
   /// studentResponseId를 찾고, 그것으로 이미지를 조회합니다.
   Future<void> _loadSectionImage() async {
     setState(() {
@@ -75,11 +85,17 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
 
     try {
       // 1. 답안 조회하여 studentResponseId 찾기
+      final query = widget.initialStudentResponseId != null
+          ? StudentAnswerQuery.byResponse(
+              studentResponseId: widget.initialStudentResponseId!,
+            )
+          : StudentAnswerQuery.byChapter(
+              chapterId: widget.chapterId,
+              academyUserId: widget.academyUserId,
+            );
+
       final answers = await widget.studentAnswerRepository.getStudentAnswers(
-        StudentAnswerQuery.byChapter(
-          chapterId: widget.chapterId,
-          academyUserId: widget.academyUserId,
-        ),
+        query,
       );
 
       // 2. 해당 문제 번호의 답안 찾기 (subQuestionNumber는 0 우선, 없으면 첫 번째)
@@ -102,6 +118,21 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
         orElse: () => matchingAnswers.first,
       );
 
+      // ExplanationSource 구성 (bookId는 현재 컨텍스트에서 알 수 없으므로 0으로 둠)
+      final questionId = QuestionIdentifier(
+        bookId: 0,
+        chapterId: answer.chapterId ?? widget.chapterId,
+        page: answer.page,
+        questionNumber: answer.questionNumber,
+        subQuestionNumber: answer.subQuestionNumber,
+      );
+
+      _explanationSource = ExplanationSource(
+        studentResponseId: answer.studentResponseId,
+        academyUserId: widget.academyUserId,
+        question: questionId,
+      );
+
       if (!mounted) return;
 
       // 3. 이미지 조회
@@ -120,6 +151,14 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
         questionNumber: imageQuestionNumber,
         subQuestionNumber: imageSubQuestionNumber,
       );
+
+      // 해설 로딩 (에러가 나도 이미지 로딩에는 영향 없음)
+      final source = _explanationSource;
+      if (source != null) {
+        // 페이지 진입 시에는 이미 생성된 해설만 조회하고,
+        // 해설이 없으면 아무 작업도 하지 않습니다 (POST 미수행).
+        await widget.explanationController.loadExisting(source);
+      }
 
       if (!mounted) return;
 
@@ -166,6 +205,11 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
 
                     // Section 이미지 (문제 영역)
                     _buildSectionImage(),
+
+                    const SizedBox(height: 24),
+
+                    // 해설 섹션
+                    _buildExplanationSection(),
 
                     const SizedBox(height: 24),
 
@@ -291,6 +335,144 @@ class _QuestionDetailPageState extends State<QuestionDetailPage> {
           child: _buildImageContent(),
         ),
       ],
+    );
+  }
+
+  Widget _buildExplanationSection() {
+    return AnimatedBuilder(
+      animation: widget.explanationController,
+      builder: (context, _) {
+        final state = widget.explanationController.state;
+
+        if (state.lastRequestPerformed && !_hasShownRequestSuccessPopup) {
+          _hasShownRequestSuccessPopup = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            showDialog<void>(
+              context: context,
+              builder: (dialogContext) {
+                return AlertDialog(
+                  title: const Text('해설 요청 완료'),
+                  content: const Text(
+                    '정상적으로 해설 생성 요청이 완료되었습니다.\n'
+                    '해설이 준비되면 알림으로 알려드릴게요!',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      child: const Text('확인'),
+                    ),
+                  ],
+                );
+              },
+            );
+          });
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  '해설',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                    color: Color(0xFF333333),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: state.isLoading || _explanationSource == null
+                      ? null
+                      : () async {
+                          final source = _explanationSource;
+                          if (source != null) {
+                            await widget.explanationController.requestAgain(
+                              source,
+                            );
+                          }
+                        },
+                  child: state.isLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          state.explanation == null ? '해설 요청' : '해설 다시 요청',
+                          style: const TextStyle(
+                            fontFamily: 'Pretendard',
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12,
+                          ),
+                        ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F9FA),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE9ECEF)),
+              ),
+              child: _buildExplanationContent(state),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildExplanationContent(QuestionExplanationState state) {
+    if (state.isLoading && state.explanation == null) {
+      return const Center(
+        child: SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    if (state.errorMessage != null) {
+      return Text(
+        state.errorMessage!,
+        style: const TextStyle(
+          fontFamily: 'Pretendard',
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+          color: Color(0xFFF44336),
+        ),
+      );
+    }
+
+    if (state.explanation == null) {
+      return const Text(
+        '아직 생성된 해설이 없습니다.\n해설 요청 버튼을 눌러 해설을 생성해보세요.',
+        style: TextStyle(
+          fontFamily: 'Pretendard',
+          fontWeight: FontWeight.w500,
+          fontSize: 14,
+          color: Color(0xFF999999),
+        ),
+      );
+    }
+
+    return Text(
+      state.explanation!.text,
+      style: const TextStyle(
+        fontFamily: 'Pretendard',
+        fontWeight: FontWeight.w400,
+        fontSize: 14,
+        color: Color(0xFF333333),
+        height: 1.5,
+      ),
     );
   }
 

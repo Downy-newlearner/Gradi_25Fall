@@ -20,6 +20,10 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
 
   // HomePage의 State에 접근하기 위한 GlobalKey
   final GlobalKey<State<HomePage>> _homePageKey = GlobalKey();
+  // UploadImagesPage의 State에 접근하기 위한 GlobalKey
+  final GlobalKey<State<UploadImagesPage>> _uploadPageKey = GlobalKey();
+  // WorkbookPage의 State에 접근하기 위한 GlobalKey
+  final GlobalKey<State<WorkbookPage>> _workbookPageKey = GlobalKey();
   // AcademyPage의 State에 접근하기 위한 GlobalKey
   final GlobalKey<State<AcademyPage>> _academyPageKey = GlobalKey();
   // NotificationPage의 State에 접근하기 위한 GlobalKey
@@ -28,8 +32,8 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   // 모든 탭 페이지들
   late final List<Widget> _pages = [
     HomePage(key: _homePageKey), // GlobalKey 전달
-    const WorkbookPage(),
-    const UploadImagesPage(),
+    WorkbookPage(key: _workbookPageKey), // GlobalKey 전달
+    UploadImagesPage(key: _uploadPageKey), // GlobalKey 전달
     AcademyPage(key: _academyPageKey), // GlobalKey 전달
     const MyPage(),
     NotificationPage(key: _notificationPageKey), // GlobalKey 전달
@@ -54,6 +58,32 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
             if (homeState != null) {
               try {
                 (homeState as dynamic).refresh();
+              } catch (e) {
+                // refresh() 메서드가 없는 경우 무시
+              }
+            }
+          }
+
+          // 문제집 탭(인덱스 1)으로 전환 시 새로고침
+          if (index == 1) {
+            final workbookState = _workbookPageKey.currentState;
+            // dynamic으로 캐스팅하여 refresh() 메서드 호출
+            if (workbookState != null) {
+              try {
+                (workbookState as dynamic).refresh();
+              } catch (e) {
+                // refresh() 메서드가 없는 경우 무시
+              }
+            }
+          }
+
+          // 이미지 업로드 탭(인덱스 2)으로 전환 시 새로고침
+          if (index == 2) {
+            final uploadState = _uploadPageKey.currentState;
+            // dynamic으로 캐스팅하여 refresh() 메서드 호출
+            if (uploadState != null) {
+              try {
+                (uploadState as dynamic).refresh();
               } catch (e) {
                 // refresh() 메서드가 없는 경우 무시
               }

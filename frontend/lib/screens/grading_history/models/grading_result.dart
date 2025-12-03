@@ -5,15 +5,16 @@ class GradingResult {
   final int questionNumber;
   final int subQuestionNumber;
   final int studentAnswerId; // 수정 시 필요
+  final int? chapterId; // 단일 수정 API 호출 시 사용
   String recognizedAnswer; // 수정 가능
   final String correctStatus; // '정답' 또는 '오답'
-  // 참고: correctStatus는 수정 후에도 서버 기준 그대로 유지됩니다.
-  // 사용자가 답을 수정해도 정답 여부는 서버에서 재계산하지 않습니다.
+  // 참고: 답안 수정 시 서버에서 정답 여부를 재계산하여 반환합니다.
 
   GradingResult({
     required this.questionNumber,
     required this.subQuestionNumber,
     required this.studentAnswerId,
+    required this.chapterId,
     required this.recognizedAnswer,
     required this.correctStatus,
   });
@@ -44,6 +45,7 @@ class GradingResult {
       questionNumber: entity.questionNumber,
       subQuestionNumber: entity.subQuestionNumber,
       studentAnswerId: entity.studentAnswerId,
+      chapterId: entity.chapterId,
       recognizedAnswer: entity.answer,
       correctStatus: correctStatus,
     );

@@ -14,9 +14,10 @@ import 'auth_service.dart';
 /// 3. 메모리 캐시로 빠른 접근
 /// 4. 상태 변경 알림 (listeners)
 class UserService {
-  static final UserService _instance = UserService._internal();
-  factory UserService() => _instance;
-  UserService._internal();
+  final AuthService _authService;
+
+  UserService({AuthService? authService})
+      : _authService = authService ?? AuthService();
 
   static const String _userDataKey = 'user_data';
 
@@ -89,7 +90,7 @@ class UserService {
   Future<User?> fetchUserFromServer() async {
     try {
       // 유효한 Access Token 확인 및 필요시 갱신
-      final token = await AuthService().ensureValidAccessToken();
+      final token = await _authService.ensureValidAccessToken();
       if (token == null) {
         developer.log('❌ No valid access token available');
         return null;
@@ -112,10 +113,10 @@ class UserService {
       if (response.statusCode == 401) {
         developer.log('⚠️ Unauthorized (401): Attempting token refresh...');
 
-        final refreshed = await AuthService().refreshAccessToken();
+        final refreshed = await _authService.refreshAccessToken();
         if (refreshed) {
           // 갱신된 토큰으로 재시도
-          final newToken = await AuthService().getAccessToken();
+          final newToken = await _authService.getAccessToken();
           if (newToken != null) {
             developer.log('🔄 Retrying request with refreshed token...');
             response = await http

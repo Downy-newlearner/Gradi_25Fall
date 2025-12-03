@@ -1,65 +1,46 @@
-import '../domain/chapter/chapter_repository.dart';
+import 'package:get_it/get_it.dart';
+
 import '../domain/chapter/get_chapters_for_book_use_case.dart';
-import '../data/chapter/chapter_repository_impl.dart';
+import '../services/get_chapter_question_statuses_use_case.dart';
 import '../domain/student_answer/student_answer_repository.dart';
 import '../domain/student_answer/get_student_answers_for_response_use_case.dart';
 import '../domain/student_answer/update_student_answers_use_case.dart';
-import '../services/student_answer_repository_impl.dart';
-import '../domain/section_image/section_image_repository.dart';
+import '../domain/student_answer/update_single_student_answer_use_case.dart';
 import '../domain/section_image/get_section_image_use_case.dart';
-import '../services/section_image_repository_impl.dart';
-import '../services/get_chapter_question_statuses_use_case.dart';
 
-/// 앱 전역 의존성 팩토리
+final GetIt _getIt = GetIt.instance;
+
+/// AppDependencies는 과거 static 싱글톤을 사용하던 코드를 위한
+/// **임시 래퍼**입니다.
 ///
-/// UseCase, Repository 등의 인스턴스를 중앙에서 관리합니다.
-///
-/// **NOTE**:
-/// - 지금은 static 싱글톤으로 사용하지만,
-/// - 나중에 테스트/멀티 인스턴스가 필요하면
-///   Stateful DI(Container, GetIt 등)로 갈아탈 예정.
-///
-/// 이 구조는 "composition root" 역할을 하며,
-/// 나중에 DI 프레임워크로 교체하기 쉽도록 설계되었습니다.
+/// 새 코드는 `getIt<>()`을 직접 사용하는 것을 권장하며,
+/// 이 클래스는 점진적으로 제거될 예정입니다.
+@Deprecated('Use getIt<>() from di_container.dart directly instead.')
 class AppDependencies {
-  // Chapter 관련 의존성
-  static final ChapterRepository _chapterRepository = ChapterRepositoryImpl();
+  // Chapter
+  static GetChaptersForBookUseCase get getChaptersForBookUseCase =>
+      _getIt<GetChaptersForBookUseCase>();
 
-  static final GetChaptersForBookUseCase getChaptersForBookUseCase =
-      GetChaptersForBookUseCase(repository: _chapterRepository);
+  static GetChapterQuestionStatusesUseCase
+      get getChapterQuestionStatusesUseCase =>
+          _getIt<GetChapterQuestionStatusesUseCase>();
 
-  // Chapter Question Status 관련 의존성 (Application Layer)
-  static final GetChapterQuestionStatusesUseCase
-      getChapterQuestionStatusesUseCase = GetChapterQuestionStatusesUseCase(
-    chapterRepository: _chapterRepository,
-    studentAnswerRepository: _studentAnswerRepository,
-  );
-
-  // Student Answer 관련 의존성
-  static final StudentAnswerRepository _studentAnswerRepository =
-      StudentAnswerRepositoryImpl();
-
-  // Repository 접근 (외부에서 직접 접근 필요 시)
+  // Student Answer
   static StudentAnswerRepository get studentAnswerRepository =>
-      _studentAnswerRepository;
+      _getIt<StudentAnswerRepository>();
 
-  static final GetStudentAnswersForResponseUseCase
-      getStudentAnswersForResponseUseCase =
-      GetStudentAnswersForResponseUseCase(
-        repository: _studentAnswerRepository,
-      );
+  static GetStudentAnswersForResponseUseCase
+      get getStudentAnswersForResponseUseCase =>
+          _getIt<GetStudentAnswersForResponseUseCase>();
 
-  static final UpdateStudentAnswersUseCase updateStudentAnswersUseCase =
-      UpdateStudentAnswersUseCase(
-        repository: _studentAnswerRepository,
-      );
+  static UpdateStudentAnswersUseCase get updateStudentAnswersUseCase =>
+      _getIt<UpdateStudentAnswersUseCase>();
 
-  // Section Image 관련 의존성
-  static final SectionImageRepository _sectionImageRepository =
-      SectionImageRepositoryImpl();
+  static UpdateSingleStudentAnswerUseCase
+      get updateSingleStudentAnswerUseCase =>
+          _getIt<UpdateSingleStudentAnswerUseCase>();
 
-  static final GetSectionImageUseCase getSectionImageUseCase =
-      GetSectionImageUseCase(
-        repository: _sectionImageRepository,
-      );
+  // Section Image
+  static GetSectionImageUseCase get getSectionImageUseCase =>
+      _getIt<GetSectionImageUseCase>();
 }

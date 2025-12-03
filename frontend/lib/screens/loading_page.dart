@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get_it/get_it.dart';
 import '../services/auth_service.dart';
 import '../services/user_service.dart';
 import '../services/assessment_repository.dart';
 import '../services/academy_service.dart';
+import '../services/fcm_service.dart';
 import 'dart:developer' as developer;
 
 /// 앱 시작 시 로딩 페이지
@@ -22,6 +24,8 @@ class LoadingPage extends StatefulWidget {
 }
 
 class _LoadingPageState extends State<LoadingPage> {
+  final getIt = GetIt.instance;
+
   @override
   void initState() {
     super.initState();
@@ -31,8 +35,8 @@ class _LoadingPageState extends State<LoadingPage> {
   /// 앱 초기화 로직
   Future<void> _initializeApp() async {
     try {
-      final authService = AuthService();
-      final assessmentRepository = AssessmentRepository();
+      final authService = getIt<AuthService>();
+      final assessmentRepository = getIt<AssessmentRepository>();
 
       // 자동 로그인 설정 확인
       final isAutoLoginEnabled = await authService.isAutoLoginEnabled();
@@ -102,7 +106,7 @@ class _LoadingPageState extends State<LoadingPage> {
       try {
         // 사용자 정보 초기화 (API 호출)
         // fetchUserFromServer 내부에서 토큰 만료 시 자동 갱신 처리됨
-        await UserService().initialize();
+        await getIt<UserService>().initialize();
         developer.log('✅ 사용자 정보 초기화 완료');
       } catch (e) {
         developer.log('❌ 사용자 정보 초기화 실패: $e');
@@ -114,7 +118,7 @@ class _LoadingPageState extends State<LoadingPage> {
         final userId = await authService.getUserId();
         if (userId != null) {
           developer.log('🔄 학원 목록 조회 중...');
-          final academyService = AcademyService();
+          final academyService = getIt<AcademyService>();
           final academies = await academyService.getUserAcademies(userId);
 
           // SharedPreferences에 학원 목록 저장
@@ -164,6 +168,16 @@ class _LoadingPageState extends State<LoadingPage> {
       } catch (e) {
         developer.log('⚠️ 학원 목록 조회 실패: $e');
         // 실패해도 앱은 계속 진행 (캐시된 데이터 사용 가능)
+      }
+
+      // FCM 토큰을 백엔드와 동기화
+      try {
+        final fcmService = getIt<FCMService>();
+        await fcmService.syncTokenWithServer();
+        developer.log('✅ FCM 토큰 동기화 완료');
+      } catch (e) {
+        developer.log('⚠️ FCM 토큰 동기화 실패: $e');
+        // 실패해도 앱은 계속 진행
       }
 
       // 메인 네비게이션 페이지로 이동

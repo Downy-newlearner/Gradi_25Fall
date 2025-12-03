@@ -64,14 +64,92 @@ class StudentAnswerApiResponse {
   }
 }
 
+/// 단일 답안 수정 응답 DTO
+class UpdatedStudentAnswerDto {
+  final int studentAnswerId;
+  final int studentResponseId;
+  final int? chapterId;
+  final int page;
+  final int questionNumber;
+  final int subQuestionNumber;
+  final String answer;
+  final String? sectionUrl;
+  final bool? correct; // null 허용
+  final double score;
+
+  UpdatedStudentAnswerDto({
+    required this.studentAnswerId,
+    required this.studentResponseId,
+    this.chapterId,
+    required this.page,
+    required this.questionNumber,
+    required this.subQuestionNumber,
+    required this.answer,
+    this.sectionUrl,
+    required this.correct,
+    required this.score,
+  });
+
+  factory UpdatedStudentAnswerDto.fromJson(Map<String, dynamic> json) {
+    // 서버가 snake_case 또는 camelCase를 혼용할 수 있으므로 둘 다 대응
+    final studentAnswerId =
+        json['studentAnswerId'] as int? ?? json['student_answer_id'] as int?;
+    final studentResponseId = json['studentResponseId'] as int? ??
+        json['student_response_id'] as int?;
+
+    if (studentAnswerId == null || studentAnswerId == 0) {
+      throw FormatException(
+        '[UpdatedStudentAnswerDto.fromJson] studentAnswerId is null or 0',
+        json,
+      );
+    }
+    if (studentResponseId == null || studentResponseId == 0) {
+      throw FormatException(
+        '[UpdatedStudentAnswerDto.fromJson] studentResponseId is null or 0',
+        json,
+      );
+    }
+
+    final chapterId =
+        json['chapterId'] as int? ?? json['chapter_id'] as int?;
+    final page = json['page'] as int? ?? 0;
+    final questionNumber =
+        json['questionNumber'] as int? ?? json['question_number'] as int? ?? 0;
+    final subQuestionNumber = json['subQuestionNumber'] as int? ??
+        json['sub_question_number'] as int? ??
+        0;
+    final answer = json['answer'] as String? ?? '';
+    final sectionUrl =
+        json['sectionUrl'] as String? ?? json['section_url'] as String?;
+    final correct =
+        json['correct'] as bool? ?? json['is_correct'] as bool?;
+    final score = (json['score'] as num?)?.toDouble() ?? 0.0;
+
+    return UpdatedStudentAnswerDto(
+      studentAnswerId: studentAnswerId,
+      studentResponseId: studentResponseId,
+      chapterId: chapterId,
+      page: page,
+      questionNumber: questionNumber,
+      subQuestionNumber: subQuestionNumber,
+      answer: answer,
+      sectionUrl: sectionUrl,
+      correct: correct,
+      score: score,
+    );
+  }
+}
+
 /// Student Answer API 호출 전용 레이어
 class StudentAnswerApi {
   final AuthService _authService;
   final http.Client _httpClient;
 
-  StudentAnswerApi({AuthService? authService, http.Client? httpClient})
-    : _authService = authService ?? AuthService(),
-      _httpClient = httpClient ?? http.Client();
+  StudentAnswerApi({
+    required AuthService authService,
+    required http.Client httpClient,
+  }) : _authService = authService,
+       _httpClient = httpClient;
 
   /// studentResponseId로 학생 답안 목록 조회
   ///
@@ -92,8 +170,9 @@ class StudentAnswerApi {
     }
 
     // 2. URI 생성
+    // ※ 서버 스펙 변경: student_response_id -> studentResponseId
     final uri = Uri.parse(
-      '${ApiConfig.baseUrl}/grading/student-answers/response?student_response_id=$studentResponseId',
+      '${ApiConfig.baseUrl}/grading/student-answers/response?studentResponseId=$studentResponseId',
     );
 
     appLog('[student_answer:student_answer_api] GET 요청: $uri');
@@ -282,6 +361,93 @@ class StudentAnswerApi {
       appLog('[student_answer:student_answer_api] 응답 본문: ${response.body}');
       developer.log('❌ [StudentAnswerApi] 응답 파싱 실패: $e');
       developer.log('❌ [StudentAnswerApi] Response body: ${response.body}');
+      rethrow;
+    }
+  }
+
+  /// 단일 답안 수정 API
+  ///
+  /// 스펙: PUT /grading/student-answers/update
+  /// Body:
+  /// {
+  ///   "student_answer_id": 1,
+  ///   "chapter_id": 1,
+  ///   "student_response_id": 1764406625968,
+  ///   "question_number": 1,
+  ///   "sub_question_number": 0,
+  ///   "answer": "test"
+  /// }
+  Future<UpdatedStudentAnswerDto> updateSingleStudentAnswer({
+    required int studentAnswerId,
+    required int studentResponseId,
+    required int questionNumber,
+    required int subQuestionNumber,
+    required String answer,
+    required int chapterId,
+  }) async {
+    appLog(
+      '[student_answer:student_answer_api] 단일 답안 수정 API 호출 시작 - studentAnswerId: $studentAnswerId',
+    );
+
+    final token = await _authService.ensureValidAccessToken();
+    if (token == null) {
+      throw Exception('인증 토큰이 없습니다. 로그인이 필요합니다.');
+    }
+
+    final uri = Uri.parse(
+      '${ApiConfig.baseUrl}/grading/student-answers/update',
+    );
+
+    final body = <String, dynamic>{
+      'student_answer_id': studentAnswerId,
+      'chapter_id': chapterId,
+      'student_response_id': studentResponseId,
+      'question_number': questionNumber,
+      'sub_question_number': subQuestionNumber,
+      'answer': answer,
+    };
+
+    appLog('[student_answer:student_answer_api] PUT 요청: $uri');
+    appLog('[student_answer:student_answer_api] 요청 본문: ${json.encode(body)}');
+    developer.log('📝 [StudentAnswerApi] PUT $uri');
+    developer.log('📝 [StudentAnswerApi] Request body: ${json.encode(body)}');
+
+    final response = await _httpClient
+        .put(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: json.encode(body),
+        )
+        .timeout(const Duration(seconds: 10));
+
+    appLog(
+      '[student_answer:student_answer_api] 단일 답안 수정 응답 코드: ${response.statusCode}',
+    );
+    appLog(
+      '[student_answer:student_answer_api] 응답 본문: ${response.body}',
+    );
+
+    if (response.statusCode == 401) {
+      throw Exception('인증에 실패했습니다. 다시 로그인해주세요.');
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      developer.log('❌ [StudentAnswerApi] 응답 본문: ${response.body}');
+      throw Exception('답안 수정에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
+
+    try {
+      final Map<String, dynamic> jsonBody =
+          json.decode(response.body) as Map<String, dynamic>;
+      final dto = UpdatedStudentAnswerDto.fromJson(jsonBody);
+      appLog('[student_answer:student_answer_api] 단일 답안 수정 응답 파싱 성공');
+      return dto;
+    } catch (e) {
+      appLog('[student_answer:student_answer_api] 단일 답안 수정 응답 파싱 실패: $e');
+      developer.log('❌ [StudentAnswerApi] updateSingleStudentAnswer parse error: $e');
+      developer.log('❌ [StudentAnswerApi] body: ${response.body}');
       rethrow;
     }
   }

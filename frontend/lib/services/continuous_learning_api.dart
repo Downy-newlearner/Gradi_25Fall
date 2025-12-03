@@ -25,9 +25,11 @@ class GradingHistorySummaryResponse {
 
 /// Continuous Learning API 호출 전용 레이어
 class ContinuousLearningApi {
-  ContinuousLearningApi({AuthService? authService, http.Client? httpClient})
-      : _authService = authService ?? AuthService(),
-        _httpClient = httpClient ?? http.Client();
+  ContinuousLearningApi({
+    required AuthService authService,
+    required http.Client httpClient,
+  })  : _authService = authService,
+        _httpClient = httpClient;
 
   final AuthService _authService;
   final http.Client _httpClient;

@@ -2,19 +2,30 @@ import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/upload_batch_service.dart';
 import '../../services/upload_sse_service.dart';
+import '../../services/academy_service.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/app_header_title.dart';
 import '../../widgets/app_header_menu_button.dart';
 import '../../routes/app_routes.dart';
+import '../../utils/app_logger.dart';
 
 enum ProblemType {
   newProblem, // 새로 풀기
   correctMistakes, // 오답 수정
+}
+
+enum UploadPageAcademyState {
+  checking, // 학원 정보 확인 중
+  hasAcademy,
+  noAcademy,
+  error, // 학원 정보를 불러오지 못함
 }
 
 class UploadImagesPage extends StatefulWidget {
@@ -28,8 +39,11 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
   List<XFile> _selectedImages = [];
   ProblemType? _selectedType;
   final ImagePicker _picker = ImagePicker();
+  final getIt = GetIt.instance;
 
-  final UploadSseService _sseService = UploadSseService();
+  late final UploadSseService _sseService = getIt<UploadSseService>();
+  late final AcademyService _academyService = getIt<AcademyService>();
+  late final AuthService _authService = getIt<AuthService>();
   final Queue<XFile> _pendingUploads = Queue<XFile>();
 
   bool _isSseConnecting = false;
@@ -38,10 +52,31 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
   String? _uploadSuccessMessage;
   int? _uploadedCount;
   int? _totalCount;
+  UploadPageAcademyState _academyState = UploadPageAcademyState.checking;
+
+  /// 메인 네비게이션에서 탭을 다시 선택했을 때
+  /// 업로드 페이지 상태를 초기화하기 위한 메서드
+  void refresh() {
+    setState(() {
+      _selectedImages = [];
+      _selectedType = null;
+      _pendingUploads.clear();
+      _isUploading = false;
+      _uploadError = null;
+      _uploadSuccessMessage = null;
+      _uploadedCount = null;
+      _totalCount = null;
+      _academyState = UploadPageAcademyState.checking;
+    });
+
+    // 학원 정보 다시 확인
+    _checkAcademyState();
+  }
 
   @override
   void initState() {
     super.initState();
+    _checkAcademyState();
     _connectSse();
   }
 
@@ -121,6 +156,9 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
   /// 문제 등록 성공 다이얼로그 표시
   Future<void> _showSuccessDialog() async {
     if (!mounted) return;
+
+    final timestamp = DateTime.now().toIso8601String();
+    appLog('[UploadImagesPage][timecheck][$timestamp] 문제 등록 완료 팝업 표시');
 
     await showDialog(
       context: context,
@@ -204,12 +242,31 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
       return;
     }
 
+    if (_academyState == UploadPageAcademyState.checking) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('학원 정보를 확인하는 중입니다. 잠시만 기다려주세요.')),
+      );
+      return;
+    }
+
+    if (_academyState == UploadPageAcademyState.noAcademy) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('학원 등록을 먼저 해주세요.')));
+      return;
+    }
+
     if (_isSseConnecting) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('업로드 채널을 준비 중입니다. 잠시 후 다시 시도해주세요.')),
       );
       return;
     }
+
+    final timestamp = DateTime.now().toIso8601String();
+    appLog(
+      '[UploadImagesPage][timecheck][$timestamp] 문제 등록 요청 시작 - imageCount=${_selectedImages.length}, type=$_selectedType',
+    );
 
     setState(() {
       _uploadError = null;
@@ -240,6 +297,10 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
         },
       );
 
+      appLog(
+        '[UploadImagesPage][timecheck] ✅ 업로드 완료 - studentResponseId=${response.studentResponseId}, total=${_selectedImages.length}',
+      );
+
       debugPrint(
         '[UploadImagesPage] ✅ 업로드 완료: studentResponseId=${response.studentResponseId}',
       );
@@ -253,6 +314,16 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
         // 성공 팝업 표시
         _showSuccessDialog();
       }
+    } on NoAcademyException catch (e) {
+      debugPrint('[UploadImagesPage] ❌ 업로드 실패(학원 없음): $e');
+      if (!mounted) return;
+      setState(() {
+        _isUploading = false;
+        _academyState = UploadPageAcademyState.noAcademy;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       debugPrint('[UploadImagesPage] ❌ 업로드 실패: $e');
       if (mounted) {
@@ -270,6 +341,41 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
     }
   }
 
+  Future<void> _checkAcademyState() async {
+    setState(() {
+      _academyState = UploadPageAcademyState.checking;
+    });
+
+    try {
+      final userId = await _authService.getUserId();
+      if (userId == null) {
+        if (!mounted) return;
+        setState(() {
+          _academyState = UploadPageAcademyState.error;
+        });
+        return;
+      }
+
+      final academies = await _academyService.getUserAcademies(userId);
+      final registered = academies
+          .where((a) => a.registerStatus == 'Y')
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _academyState = registered.isEmpty
+            ? UploadPageAcademyState.noAcademy
+            : UploadPageAcademyState.hasAcademy;
+      });
+    } catch (e) {
+      debugPrint('[UploadImagesPage] 학원 상태 조회 실패: $e');
+      if (!mounted) return;
+      setState(() {
+        _academyState = UploadPageAcademyState.error;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -282,13 +388,20 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
           children: [
             _buildHeader(),
             Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    SizedBox(height: screenHeight * 0.015),
-                    _buildImageGrid(screenWidth, screenHeight),
-                    SizedBox(height: screenHeight * 0.02),
-                  ],
+              child: RefreshIndicator(
+                onRefresh: () async {
+                  refresh();
+                },
+                child: SingleChildScrollView(
+                  physics:
+                      const AlwaysScrollableScrollPhysics(), // Pull-to-refresh를 위해 항상 스크롤 가능하도록
+                  child: Column(
+                    children: [
+                      SizedBox(height: screenHeight * 0.015),
+                      _buildImageGrid(screenWidth, screenHeight),
+                      SizedBox(height: screenHeight * 0.02),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -321,15 +434,53 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                '이미지를 선택해주세요',
-                style: TextStyle(
-                  fontFamily: 'Pretendard',
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                  color: Color(0xFF7F818E),
+              if (_academyState == UploadPageAcademyState.noAcademy) ...[
+                const Text(
+                  '학원 등록을 먼저 해주세요.',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    color: Color(0xFF7F818E),
+                  ),
                 ),
-              ),
+              ] else if (_academyState == UploadPageAcademyState.error) ...[
+                const Text(
+                  '학원 정보를 불러오지 못했어요.',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    color: Color(0xFF7F818E),
+                  ),
+                ),
+              ] else if (_academyState == UploadPageAcademyState.checking) ...[
+                const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '학원 정보를 확인하는 중입니다...',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    color: Color(0xFF7F818E),
+                  ),
+                ),
+              ] else ...[
+                const Text(
+                  '이미지를 선택해주세요',
+                  style: TextStyle(
+                    fontFamily: 'Pretendard',
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    color: Color(0xFF7F818E),
+                  ),
+                ),
+              ],
               if (_uploadError != null) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -472,13 +623,29 @@ class _UploadImagesPageState extends State<UploadImagesPage> {
                 ),
                 child: Center(
                   child: Text(
-                    _selectedImages.isEmpty
-                        ? '이미지 가져오기'
-                        : (_isUploading
-                              ? (_uploadedCount != null && _totalCount != null
-                                    ? '업로드 중... ($_uploadedCount/$_totalCount)'
-                                    : '업로드 중...')
-                              : '문제 등록'),
+                    () {
+                      if (_selectedImages.isEmpty) {
+                        if (_academyState == UploadPageAcademyState.noAcademy) {
+                          return '학원 등록 필요';
+                        }
+                        if (_academyState == UploadPageAcademyState.checking) {
+                          return '학원 정보 확인 중...';
+                        }
+                        if (_academyState == UploadPageAcademyState.error) {
+                          return '다시 시도';
+                        }
+                        return '이미지 가져오기';
+                      }
+
+                      if (_isUploading) {
+                        if (_uploadedCount != null && _totalCount != null) {
+                          return '업로드 중... ($_uploadedCount/$_totalCount)';
+                        }
+                        return '업로드 중...';
+                      }
+
+                      return '문제 등록';
+                    }(),
                     style: const TextStyle(
                       fontFamily: 'Pretendard',
                       fontWeight: FontWeight.w700,

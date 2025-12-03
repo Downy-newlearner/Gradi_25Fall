@@ -21,6 +21,8 @@ class MyPage extends StatefulWidget {
 }
 
 class _MyPageState extends State<MyPage> {
+  final UserService _userService = UserService();
+  
   // UserService에서 사용자 정보 가져오기
   String _userName = '게스트';
   String? _profileImageUrl;
@@ -31,23 +33,37 @@ class _MyPageState extends State<MyPage> {
     _loadUserData();
 
     // 리스너 등록 (프로필 수정 시 자동 업데이트)
-    UserService().addListener(_onUserChanged);
+    _userService.addListener(_onUserChanged);
   }
 
   @override
   void dispose() {
     // 리스너 제거
-    UserService().removeListener(_onUserChanged);
+    _userService.removeListener(_onUserChanged);
     super.dispose();
   }
 
   /// UserService에서 사용자 정보 로드
-  void _loadUserData() {
-    final user = UserService().getUser();
-    if (user != null) {
+  /// 1. 캐시에서 먼저 로드 (빠른 UI 표시)
+  /// 2. 서버에서 최신 정보 가져오기
+  Future<void> _loadUserData() async {
+    // 1. 캐시에서 먼저 로드
+    final cachedUser = _userService.getUser();
+    if (cachedUser != null) {
       setState(() {
-        _userName = user.name;
-        _profileImageUrl = user.profileImageUrl;
+        _userName = cachedUser.name;
+        _profileImageUrl = cachedUser.profileImageUrl;
+      });
+    }
+
+    // 2. 서버에서 최신 정보 가져오기
+    final fetchedUser = await _userService.fetchUserFromServer();
+    if (!mounted) return;
+
+    if (fetchedUser != null) {
+      setState(() {
+        _userName = fetchedUser.name;
+        _profileImageUrl = fetchedUser.profileImageUrl;
       });
     }
   }
