@@ -131,7 +131,13 @@ class _ContinuousLearningWidgetV2State
     });
   }
 
-  /// UseCase로 현재 월의 상태 로드
+  /// UseCase로 현재 월의 학습 상태 로드
+  ///
+  /// 동기화 시점:
+  /// - initState: 위젯 초기화 시 현재 월 데이터 로드
+  /// - didChangeDependencies: 다른 페이지에서 돌아올 때 최신 데이터로 동기화
+  /// - didUpdateWidget: monthlyStatusUseCase 변경 시 새로 로드
+  /// - _changeMonth: 월 변경 시 새 월의 데이터 로드
   Future<void> _loadMonthlyStatuses() async {
     if (widget.monthlyStatusUseCase == null) return;
 
@@ -158,6 +164,12 @@ class _ContinuousLearningWidgetV2State
     if (_itemWidth == null) {
       final screenWidth = MediaQuery.of(context).size.width;
       _itemWidth = screenWidth / 7;
+    }
+
+    // 다른 페이지에서 돌아올 때 현재 월의 학습 상태를 최신 정보로 동기화
+    // (예: 숙제 완료 상태 변경 등)
+    if (widget.monthlyStatusUseCase != null) {
+      _loadMonthlyStatuses();
     }
   }
 
@@ -836,7 +848,11 @@ class _ContinuousLearningWidgetV2State
     if (widget.dateAssessments != null) {
       final dateStr = _formatDate(date);
       final assessments = widget.dateAssessments![dateStr] ?? [];
-      return assessments.any((a) => a.assessStatus == 'Y');
+      // 과제가 하나라도 있을 때, "모든 과제가 Y"인 날만 완료로 간주
+      if (assessments.isEmpty) {
+        return false;
+      }
+      return assessments.every((a) => a.assessStatus == 'Y');
     }
 
     // 우선순위 4: 기존 completedDates 사용 (하위 호환성, 추후 제거 예정)

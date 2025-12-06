@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../config/api_config.dart';
 import '../models/assessment.dart';
+import '../utils/app_logger.dart';
 import 'auth_service.dart';
 
 /// 서버와 통신하여 Assessment 데이터를 가져오는 전용 API 레이어.
@@ -12,8 +13,8 @@ class AssessmentApi {
   AssessmentApi({
     required AuthService authService,
     required http.Client httpClient,
-  })  : _authService = authService,
-        _httpClient = httpClient;
+  }) : _authService = authService,
+       _httpClient = httpClient;
 
   final AuthService _authService;
   final http.Client _httpClient;
@@ -38,6 +39,11 @@ class AssessmentApi {
       '[AssessmentApi] GET $uri | academy: $userAcademyId, monthStart: $monthStart',
     );
 
+    // appLog로 API 호출 정보 기록
+    appLog(
+      '[continuous_learning:assessment_api] API 호출 시작 - URL: $uri, userAcademyId: $userAcademyId, monthStart: $monthStart',
+    );
+
     final response = await _httpClient
         .get(
           uri,
@@ -53,6 +59,11 @@ class AssessmentApi {
     final previewBody = response.body.substring(0, previewLength);
     print(
       '[AssessmentApi] Response status: ${response.statusCode} | body preview: $previewBody',
+    );
+
+    // appLog로 API 응답 정보 기록
+    appLog(
+      '[continuous_learning:assessment_api] API 응답 - status: ${response.statusCode}, body length: ${response.body.length}, preview: $previewBody',
     );
 
     if (response.statusCode == 401) {
@@ -86,6 +97,16 @@ class AssessmentApi {
       } else {
         developer.log('⚠️ [AssessmentApi] 알 수 없는 응답 형식: $data');
       }
+
+      // appLog로 파싱된 데이터 정보 기록
+      appLog(
+        '[continuous_learning:assessment_api] 데이터 파싱 완료 - 날짜별 과제 수: ${monthData.length}개 날짜',
+      );
+      monthData.forEach((date, assessments) {
+        appLog(
+          '[continuous_learning:assessment_api]   - $date: ${assessments.length}개 과제',
+        );
+      });
 
       return monthData;
     } catch (e) {

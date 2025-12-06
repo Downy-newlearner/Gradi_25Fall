@@ -11,6 +11,7 @@ import '../services/daily_learning_service.dart';
 import '../domain/learning/get_monthly_learning_status_use_case.dart';
 import '../models/assessment.dart';
 import '../utils/academy_utils.dart';
+import '../utils/app_logger.dart';
 import 'dart:developer' as developer;
 
 /// 홈 화면 - 개선된 UI/UX
@@ -48,9 +49,6 @@ class _HomePageState extends State<HomePage> {
   // UseCase 인스턴스 (DI에서 주입)
   late final GetMonthlyLearningStatusUseCase _monthlyStatusUseCase;
 
-  // 숙제 완료 상태 관리 (UI 상태용)
-  final Map<String, bool> _homeworkStatus = {};
-
   // 학원 상태 관리 (enum 사용)
   AcademyState _academyState = AcademyState.loading;
   String _academyName = '학원';
@@ -87,6 +85,15 @@ class _HomePageState extends State<HomePage> {
     _initializeAcademyData(forceRefresh: true);
   }
 
+  /// 오늘의 숙제 정보 동기화
+  /// 다른 페이지에서 돌아올 때 선택된 날짜의 Assessment 데이터를 최신 정보로 갱신
+  Future<void> _synchronizeTodayHomework() async {
+    if (_academyState != AcademyState.ready) return;
+
+    // _loadDateData를 forceRefresh로 호출하여 최신 데이터 가져오기
+    await _loadDateData(_selectedDate, forceRefresh: true);
+  }
+
   /// 외부에서 호출 가능한 새로고침 메서드
   /// 탭 전환 시 MainNavigationPage에서 호출
   void refresh() {
@@ -108,7 +115,6 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     developer.log('🔁 [HomePage] 디폴트 학원 변경 감지, 데이터 재초기화');
     _dateAssessments.clear();
-    _homeworkStatus.clear();
     _initializeAcademyData(forceRefresh: true);
   }
 
@@ -265,6 +271,9 @@ class _HomePageState extends State<HomePage> {
 
       // 5. 선택된 날짜의 학습 데이터 로드
       await _loadSelectedDateLearningData(_selectedDate);
+
+      // 6. 오늘의 숙제 정보 동기화 (최신 정보로 갱신)
+      await _synchronizeTodayHomework();
     }
   }
 
@@ -374,23 +383,27 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 날짜 선택 시 호출
+  /// 연속학습 위젯에서 날짜를 클릭하면 이 메서드가 호출됩니다
   void _onDateSelected(DateTime date) {
+    final dateStr = _formatDate(date);
+    appLog('[continuous_learning:home_page] 날짜 선택됨 - $dateStr (연속학습 위젯에서 클릭)');
+
     setState(() {
       _selectedDate = date;
     });
 
-    // 선택된 날짜의 데이터가 없으면 로드
-    final dateStr = _formatDate(date);
-    if (!_dateAssessments.containsKey(dateStr)) {
-      _loadDateData(date);
-    }
+    // 날짜 선택 시 항상 최신 데이터로 동기화
+    _loadDateData(date, forceRefresh: true);
 
     // 선택된 날짜의 학습 데이터 로드
     _loadSelectedDateLearningData(date);
   }
 
   /// 특정 날짜 데이터 로드
-  Future<void> _loadDateData(DateTime date) async {
+  ///
+  /// [date]: 로드할 날짜
+  /// [forceRefresh]: true면 캐시를 무시하고 서버에서 최신 데이터를 가져옵니다
+  Future<void> _loadDateData(DateTime date, {bool forceRefresh = false}) async {
     final dateStr = _formatDate(date);
 
     // 학원이 없으면 건너뛰기
@@ -415,11 +428,18 @@ class _HomePageState extends State<HomePage> {
       final assessments = await _assessmentRepository.getForDate(
         academyId: userAcademyId,
         date: dateStr,
+        forceRefresh: forceRefresh,
       );
 
       setState(() {
         _dateAssessments[dateStr] = assessments;
       });
+
+      if (forceRefresh) {
+        developer.log(
+          '✅ [HomePage] 날짜 데이터 강제 새로고침 완료: $dateStr - ${assessments.length}개 과제',
+        );
+      }
     } catch (e) {
       developer.log('⚠️ 날짜 데이터 로드 실패: $e');
       // 에러 발생 시 빈 리스트 설정
@@ -476,7 +496,9 @@ class _HomePageState extends State<HomePage> {
   Set<String> _getCompletedDates() {
     final completedDates = <String>[];
     _dateAssessments.forEach((date, assessments) {
-      if (assessments.any((a) => a.assessStatus == 'Y')) {
+      // 과제가 하나라도 있을 때, "모든 과제가 Y"인 날만 완료로 간주
+      if (assessments.isNotEmpty &&
+          assessments.every((a) => a.assessStatus == 'Y')) {
         completedDates.add(date);
       }
     });
@@ -740,6 +762,9 @@ class _HomePageState extends State<HomePage> {
         _dateAssessments.clear();
         await _loadRemainingMonthData();
 
+        // 오늘의 숙제 정보 동기화
+        await _synchronizeTodayHomework();
+
         developer.log('✅ 학원 변경 완료: ${academy.academyName}');
       }
     } catch (e) {
@@ -997,10 +1022,8 @@ class _HomePageState extends State<HomePage> {
                     ...bookAssessments.asMap().entries.map((entry) {
                       final index = entry.key;
                       final assessment = entry.value;
-                      final statusKey = '$bookId-$index';
-                      final isCompleted =
-                          _homeworkStatus[statusKey] ??
-                          (assessment.assessStatus == 'Y');
+                      // 항상 서버에서 가져온 최신 상태를 사용
+                      final isCompleted = assessment.assessStatus == 'Y';
 
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10),
