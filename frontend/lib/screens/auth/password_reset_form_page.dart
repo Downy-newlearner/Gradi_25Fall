@@ -7,6 +7,7 @@ import '../../widgets/back_button.dart' as custom;
 import '../../widgets/page_title.dart';
 import '../../widgets/next_button.dart';
 import '../../widgets/input_field.dart';
+import '../../config/api_config.dart';
 
 class PasswordResetFormPage extends StatefulWidget {
   const PasswordResetFormPage({super.key});
@@ -196,8 +197,7 @@ class _PasswordResetFormPageState extends State<PasswordResetFormPage> {
       // 개발 환경에서 SSL 인증서 검증 우회
       HttpOverrides.global = MyHttpOverrides();
 
-      const String serverIp = '3.34.214.133';
-      const String url = 'https://$serverIp/users/reset-password';
+      final url = ApiConfig.getResetPasswordUri();
 
       // 요청 데이터 준비
       final Map<String, String> requestData = {
@@ -209,7 +209,7 @@ class _PasswordResetFormPageState extends State<PasswordResetFormPage> {
 
       // API 호출
       final response = await http.post(
-        Uri.parse(url),
+        url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestData),
       );

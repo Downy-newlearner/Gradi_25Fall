@@ -1,9 +1,76 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
+import 'firebase_options.dart';
 import 'routes/app_routes.dart';
 import 'theme/app_theme.dart';
+import 'config/di_container.dart';
+import 'services/fcm_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 1. SharedPreferences 동기 인스턴스 확보
+  final sharedPrefs = await SharedPreferences.getInstance();
+
+  // 2. DI Container 초기화 (SharedPreferences 포함)
+  await setupDependencies(sharedPrefs: sharedPrefs);
+
+  // 🔥 개발 환경에서만 SSL 인증서 검증 우회
+  // 프로덕션에서는 제거하거나 kDebugMode로 감싸기
+  if (kDebugMode) {
+    HttpOverrides.global = MyHttpOverrides();
+  }
+
+  // Firebase 초기화 (이미 초기화되어 있으면 스킵)
+  try {
+    // 이미 초기화되어 있는지 확인
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      debugPrint('✅ Firebase 초기화 성공');
+    } else {
+      debugPrint('ℹ️ Firebase는 이미 초기화되어 있습니다.');
+    }
+  } catch (e) {
+    debugPrint('❌ Firebase 초기화 실패: $e');
+    // 중복 초기화 오류는 무시 (Hot Reload/Restart 시 발생 가능)
+    if (e.toString().contains('duplicate-app')) {
+      debugPrint('ℹ️ Firebase가 이미 초기화되어 있습니다. (Hot Reload/Restart)');
+    } else {
+      // iOS에서 GoogleService-Info.plist를 찾지 못하는 경우
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        debugPrint(
+          '⚠️ iOS: GoogleService-Info.plist 파일이 Xcode 프로젝트에 포함되어 있는지 확인하세요.',
+        );
+        debugPrint('   파일 경로: ios/Runner/GoogleService-Info.plist');
+        debugPrint('   Xcode에서: Runner.xcworkspace를 열고 파일이 프로젝트에 추가되어 있는지 확인');
+      }
+      rethrow;
+    }
+  }
+
+  // FCM 초기화
+  try {
+    await getIt<FCMService>().initialize();
+  } catch (e) {
+    debugPrint('❌ FCM 초기화 실패: $e');
+    // FCM 초기화 실패해도 앱은 계속 실행
+  }
+
+  // 사용자 정보 초기화는 로딩 페이지에서 처리
+  // (자동 로그인 시 로딩 페이지를 표시하면서 API 호출)
+
+  // 세로 방향 고정
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   runApp(const GradiApp());
 }
 
@@ -28,7 +95,7 @@ class GradiApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
 
       // Routing configuration
-      initialRoute: '/login', // login_page.dart 이 페이지로 시작
+      initialRoute: AppRoutes.loading, // 자동 로그인 로직 실행을 위해 로딩 페이지로 시작
       routes: AppRoutes.routes,
       onGenerateRoute: AppRoutes.onGenerateRoute,
 
@@ -65,5 +132,16 @@ class _UnknownRoutePage extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// 개발 환경에서 SSL 인증서 검증 우회를 위한 클래스
+// 프로덕션에서는 제거하거나 kDebugMode로 감싸기
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
   }
 }

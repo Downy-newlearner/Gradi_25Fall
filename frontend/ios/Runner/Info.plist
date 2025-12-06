@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>학습 문제를 업로드하기 위해 갤러리 접근이 필요합니다.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>학습 문제를 촬영하기 위해 카메라 접근이 필요합니다.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>근처 학원을 찾기 위해 위치 정보가 필요합니다.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>근처 학원을 찾기 위해 위치 정보가 필요합니다.</string>
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<false/>
 </dict>
 </plist>

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 import '../../widgets/back_button.dart';
+import '../../services/location_service.dart';
+import '../../services/academy_service.dart';
 
 class AcademyListPage extends StatefulWidget {
   const AcademyListPage({super.key});
@@ -10,14 +13,18 @@ class AcademyListPage extends StatefulWidget {
 
 class _AcademyListPageState extends State<AcademyListPage> {
   final TextEditingController _searchController = TextEditingController();
+  final LocationService _locationService = LocationService();
+  final AcademyService _academyService = AcademyService();
+
   List<AcademyData> _filteredAcademies = [];
   List<AcademyData> _allAcademies = [];
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _initializeAcademies();
-    _filteredAcademies = _allAcademies;
+    _fetchNearbyAcademies();
   }
 
   @override
@@ -25,105 +32,63 @@ class _AcademyListPageState extends State<AcademyListPage> {
     _searchController.dispose();
     super.dispose();
   }
-  // TODO: Implement logic to fetch information of 20 nearby academies from the database.
-  // Details:
-  // - The academies should be displayed in order of proximity.
-  // - Implement a search functionality where typing "이투스" in the search bar
-  //   will display all academies with "이투스" in their name.
 
-  void _initializeAcademies() {
-    _allAcademies = [
-      AcademyData(
-        name: '정다훈 영어학원',
-        distance: '0.5km',
-        address: '경기도 용인시 기흥구 죽전로 152',
-        thumbnail: 'assets/images/academy1.jpg',
-      ),
-      AcademyData(
-        name: '청담어학원 죽전캠퍼스',
-        distance: '0.8km',
-        address: '경기도 용인시 기흥구 죽전로 200',
-        thumbnail: 'assets/images/academy2.jpg',
-      ),
-      AcademyData(
-        name: '메가스터디 영어학원',
-        distance: '1.2km',
-        address: '경기도 용인시 기흥구 죽전로 300',
-        thumbnail: 'assets/images/academy3.jpg',
-      ),
-      AcademyData(
-        name: '대성마이맥 영어학원',
-        distance: '1.5km',
-        address: '경기도 용인시 기흥구 신갈로 100',
-        thumbnail: 'assets/images/academy4.jpg',
-      ),
-      AcademyData(
-        name: '이투스 영어학원',
-        distance: '2.0km',
-        address: '경기도 용인시 기흥구 신갈로 200',
-        thumbnail: 'assets/images/academy5.jpg',
-      ),
-      AcademyData(
-        name: '청심영어학원',
-        distance: '2.3km',
-        address: '경기도 용인시 기흥구 보정로 50',
-        thumbnail: 'assets/images/academy6.jpg',
-      ),
-      AcademyData(
-        name: '윤선생 영어학원',
-        distance: '2.8km',
-        address: '경기도 용인시 기흥구 보정로 150',
-        thumbnail: 'assets/images/academy7.jpg',
-      ),
-      AcademyData(
-        name: '파고다 영어학원',
-        distance: '3.1km',
-        address: '경기도 용인시 기흥구 보정로 250',
-        thumbnail: 'assets/images/academy8.jpg',
-      ),
-      AcademyData(
-        name: 'YBM 영어학원',
-        distance: '3.5km',
-        address: '경기도 용인시 기흥구 구갈로 100',
-        thumbnail: 'assets/images/academy9.jpg',
-      ),
-      AcademyData(
-        name: '스터디포스 영어학원',
-        distance: '4.0km',
-        address: '경기도 용인시 기흥구 구갈로 200',
-        thumbnail: 'assets/images/academy10.jpg',
-      ),
-      AcademyData(
-        name: '글로벌어학원',
-        distance: '4.2km',
-        address: '경기도 용인시 기흥구 신갈로 300',
-        thumbnail: 'assets/images/academy11.jpg',
-      ),
-      AcademyData(
-        name: '어학원 스카이',
-        distance: '4.8km',
-        address: '경기도 용인시 기흥구 신갈로 400',
-        thumbnail: 'assets/images/academy12.jpg',
-      ),
-      AcademyData(
-        name: '영어마을학원',
-        distance: '5.1km',
-        address: '경기도 용인시 기흥구 죽전로 500',
-        thumbnail: 'assets/images/academy13.jpg',
-      ),
-      AcademyData(
-        name: '토익마스터 학원',
-        distance: '5.5km',
-        address: '경기도 용인시 기흥구 죽전로 600',
-        thumbnail: 'assets/images/academy14.jpg',
-      ),
-      AcademyData(
-        name: '토플전문학원',
-        distance: '6.0km',
-        address: '경기도 용인시 기흥구 죽전로 700',
-        thumbnail: 'assets/images/academy15.jpg',
-      ),
-    ];
+  /// 근처 학원 리스트 조회
+  Future<void> _fetchNearbyAcademies() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      // 개발 환경에서 SSL 인증서 검증 우회 (프로덕션에서는 제거)
+      HttpOverrides.global = MyHttpOverrides();
+
+      // 현재 위치 가져오기
+      final position = await _locationService.getCurrentLocation();
+
+      if (position == null) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = '위치 정보를 가져올 수 없습니다. 위치 권한을 확인해주세요.';
+        });
+        return;
+      }
+
+      // API 호출하여 근처 학원 리스트 가져오기
+      final academies = await _academyService.getNearbyAcademies(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+
+      // 응답 데이터를 AcademyData로 변환
+      _allAcademies = academies.map((academy) {
+        return AcademyData(
+          name: academy.academyName,
+          distance: '${academy.distanceKm.toStringAsFixed(1)}km',
+          address: academy.academyRoadAddress,
+          thumbnail: 'assets/images/academy1.jpg', // 기본 썸네일
+          academyCode: academy.academyCode,
+        );
+      }).toList();
+
+      // 거리순으로 정렬 (이미 서버에서 정렬되어 있을 수 있지만 확실히 하기 위해)
+      _allAcademies.sort((a, b) {
+        final distanceA = double.parse(a.distance.replaceAll('km', ''));
+        final distanceB = double.parse(b.distance.replaceAll('km', ''));
+        return distanceA.compareTo(distanceB);
+      });
+
+      setState(() {
+        _filteredAcademies = _allAcademies;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+    }
   }
 
   void _onSearchChanged(String query) {
@@ -171,8 +136,12 @@ class _AcademyListPageState extends State<AcademyListPage> {
                       height: MediaQuery.of(context).size.height * 0.03,
                     ),
 
-                    // 학원 목록
-                    _buildAcademyList(),
+                    // 학원 목록 또는 로딩/에러 상태
+                    _isLoading
+                        ? _buildLoadingState()
+                        : _errorMessage != null
+                        ? _buildErrorState()
+                        : _buildAcademyList(),
 
                     Container(
                       height: MediaQuery.of(context).size.height * 0.025,
@@ -252,16 +221,99 @@ class _AcademyListPageState extends State<AcademyListPage> {
           ),
           prefixIcon: Icon(Icons.search, color: Color(0xFF666666), size: 23),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: 22,
-            vertical: 11,
-          ),
+          contentPadding: EdgeInsets.symmetric(horizontal: 22, vertical: 11),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(40.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text(
+              '근처 학원을 찾는 중...',
+              style: TextStyle(
+                fontFamily: 'Pretendard',
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                color: Color(0xFF666666),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: Color(0xFFADADAD)),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage ?? '오류가 발생했습니다',
+              style: const TextStyle(
+                fontFamily: 'Pretendard',
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                color: Color(0xFF666666),
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _fetchNearbyAcademies,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF333333),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+              child: const Text(
+                '다시 시도',
+                style: TextStyle(
+                  fontFamily: 'Pretendard',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildAcademyList() {
+    if (_filteredAcademies.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40.0),
+          child: Text(
+            '근처에 학원이 없습니다.',
+            style: TextStyle(
+              fontFamily: 'Pretendard',
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              color: Color(0xFF666666),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -295,8 +347,18 @@ class _AcademyListPageState extends State<AcademyListPage> {
 
   Widget _buildAcademyCard(AcademyData academy) {
     return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(context, '/academy/detail', arguments: academy);
+      onTap: () async {
+        // 학원 상세 페이지로 이동하고 등록 성공 여부를 받음
+        final result = await Navigator.pushNamed(
+          context,
+          '/academy/detail',
+          arguments: academy,
+        );
+        // 등록 성공 시 academy_page의 캐시 갱신을 위해 결과 전달
+        if (result == true && mounted) {
+          // academy_list_page에서 academy_page로 결과 전달
+          Navigator.of(context).pop(true);
+        }
       },
       child: Container(
         padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.025),
@@ -308,19 +370,7 @@ class _AcademyListPageState extends State<AcademyListPage> {
         child: Row(
           children: [
             // 학원 썸네일
-            Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.25,
-                minWidth: 80,
-                maxHeight: MediaQuery.of(context).size.width * 0.25,
-                minHeight: 80,
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFF666666),
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: const Icon(Icons.school, color: Colors.white, size: 40),
-            ),
+            _buildAcademyThumbnail(academy),
 
             Container(width: MediaQuery.of(context).size.width * 0.04),
 
@@ -377,6 +427,67 @@ class _AcademyListPageState extends State<AcademyListPage> {
       ),
     );
   }
+
+  Widget _buildAcademyThumbnail(AcademyData academy) {
+    return FutureBuilder<String?>(
+      future: academy.academyCode != null
+          ? _academyService
+                .getAcademyImages(academy.academyCode!)
+                .then((response) => response.mainImageUrl)
+                .catchError((e) {
+                  return null;
+                })
+          : Future.value(null),
+      builder: (context, snapshot) {
+        final imageUrl = snapshot.data;
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+
+        return Container(
+          width: MediaQuery.of(context).size.width * 0.25,
+          height: MediaQuery.of(context).size.width * 0.25,
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.25,
+            minWidth: 80,
+            maxHeight: MediaQuery.of(context).size.width * 0.25,
+            minHeight: 80,
+          ),
+          decoration: BoxDecoration(
+            color: const Color(0xFF666666),
+            borderRadius: BorderRadius.circular(5),
+          ),
+          child: isLoading
+              ? const Center(
+                  child: SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                )
+              : imageUrl != null && imageUrl.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(5),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.school,
+                        color: Colors.white,
+                        size: 40,
+                      );
+                    },
+                  ),
+                )
+              : const Icon(Icons.school, color: Colors.white, size: 40),
+        );
+      },
+    );
+  }
 }
 
 class AcademyData {
@@ -384,11 +495,23 @@ class AcademyData {
   final String distance;
   final String address;
   final String thumbnail;
+  final String? academyCode; // 학원 코드
 
   AcademyData({
     required this.name,
     required this.distance,
     required this.address,
     required this.thumbnail,
+    this.academyCode,
   });
+}
+
+// 개발 환경에서 SSL 인증서 검증 우회를 위한 클래스 (프로덕션에서는 제거)
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
+  }
 }
