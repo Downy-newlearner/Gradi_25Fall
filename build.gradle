@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+    // Spring Boot plugin 제거
+    id 'io.spring.dependency-management'
+}
+
+group = 'kr.ac.dankook.microservices'
+version = '1.0.0'
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'software.amazon.awssdk:s3:2.25.54'   // 최신 버전 S3 SDK
+    implementation 'software.amazon.awssdk:sts:2.25.54'  // (권장) IAM Role 기반 인증 시 필요
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'com.amazonaws:aws-lambda-java-core:1.2.2'
+    implementation 'com.amazonaws:aws-lambda-java-events:3.11.0'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux' // WebClient
+
+    implementation project(':common-library')
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5' // JSON 직렬화/파싱용
+
+}
