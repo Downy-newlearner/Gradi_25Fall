@@ -1,0 +1,385 @@
+{
+  "image_path": "./test/Hierarchical_crop/images/exp_images/학생이 푼 문제(실전 모의고사) - 1.jpg",
+  "page_name": "학생이 푼 문제(실전 모의고사) - 1",
+  "page_number_ocr": "88",
+  "sections": [
+    {
+      "section_idx": 0,
+      "problem_number_ocr": "04",
+      "problem_number_override": false,
+      "answer_number": "3",
+      "correction": true,
+      "section_crop_path": "test/Hierarchical_crop/images/service_test/학생이 푼 문제(실전 모의고사) - 1/section_00.jpg",
+      "problem_crop_path": null,
+      "answer_1_crop_path": null,
+      "answer_2_crop_path": null,
+      "crop_success": true,
+      "is_boundary_issue": true,
+      "used_resnet": true,
+      "resnet_confidence": 0.9710263013839722,
+      "resnet_failed": false,
+      "answer_source": "answer_1_resnet",
+      "yolo_iou_verification": {
+        "yolo_best": "3",
+        "yolo_iou": 0.3301303223734631,
+        "resnet_pred": "3",
+        "resnet_conf": 0.9710263013839722,
+        "all_ious": [
+          {
+            "number": "4",
+            "iou": 0.0,
+            "confidence": 0.7046958804130554
+          },
+          {
+            "number": "3",
+            "iou": 0.3301303223734631,
+            "confidence": 0.6537873148918152
+          },
+          {
+            "number": "1",
+            "iou": 0.0,
+            "confidence": 0.5980609655380249
+          },
+          {
+            "number": "5",
+            "iou": 0.0,
+            "confidence": 0.5793555378913879
+          },
+          {
+            "number": "2",
+            "iou": 0.0,
+            "confidence": 0.5525653958320618
+          }
+        ]
+      },
+      "debug_info": {
+        "original_bbox": [
+          1188.9056396484375,
+          438.5601501464844,
+          2178.552978515625,
+          1473.1458740234375
+        ],
+        "expanded_bbox": [
+          1138,
+          388,
+          2228,
+          1523
+        ],
+        "crop_size": [
+          1090,
+          1135
+        ],
+        "image_size": [
+          2332,
+          3212
+        ],
+        "answer_1_count": 3,
+        "answer_2_count": 0,
+        "problem_number_count": 1
+      }
+    },
+    {
+      "section_idx": 1,
+      "problem_number_ocr": "01",
+      "problem_number_override": false,
+      "answer_number": "4",
+      "correction": true,
+      "section_crop_path": "test/Hierarchical_crop/images/service_test/학생이 푼 문제(실전 모의고사) - 1/section_01.jpg",
+      "problem_crop_path": null,
+      "answer_1_crop_path": null,
+      "answer_2_crop_path": null,
+      "crop_success": true,
+      "is_boundary_issue": true,
+      "used_resnet": true,
+      "resnet_confidence": 0.998916506767273,
+      "resnet_failed": false,
+      "answer_source": "answer_1_resnet",
+      "yolo_iou_verification": {
+        "yolo_best": "4",
+        "yolo_iou": 0.4874873402916174,
+        "resnet_pred": "4",
+        "resnet_conf": 0.998916506767273,
+        "all_ious": [
+          {
+            "number": "1",
+            "iou": 0.0,
+            "confidence": 0.74174565076828
+          },
+          {
+            "number": "5",
+            "iou": 0.0,
+            "confidence": 0.7329201102256775
+          },
+          {
+            "number": "2",
+            "iou": 0.0,
+            "confidence": 0.730426549911499
+          },
+          {
+            "number": "4",
+            "iou": 0.4874873402916174,
+            "confidence": 0.7164048552513123
+          },
+          {
+            "number": "3",
+            "iou": 0.02179378124835689,
+            "confidence": 0.6971093416213989
+          }
+        ]
+      },
+      "debug_info": {
+        "original_bbox": [
+          164.2495880126953,
+          949.6358642578125,
+          1143.997314453125,
+          1602.7301025390625
+        ],
+        "expanded_bbox": [
+          114,
+          899,
+          1193,
+          1652
+        ],
+        "crop_size": [
+          1079,
+          753
+        ],
+        "image_size": [
+          2332,
+          3212
+        ],
+        "answer_1_count": 1,
+        "answer_2_count": 0,
+        "problem_number_count": 1
+      }
+    },
+    {
+      "section_idx": 2,
+      "problem_number_ocr": "02",
+      "problem_number_override": false,
+      "answer_number": "2",
+      "correction": true,
+      "section_crop_path": "test/Hierarchical_crop/images/service_test/학생이 푼 문제(실전 모의고사) - 1/section_02.jpg",
+      "problem_crop_path": null,
+      "answer_1_crop_path": null,
+      "answer_2_crop_path": null,
+      "crop_success": true,
+      "is_boundary_issue": true,
+      "used_resnet": true,
+      "resnet_confidence": 0.9951686859130859,
+      "resnet_failed": false,
+      "answer_source": "answer_1_resnet",
+      "yolo_iou_verification": {
+        "yolo_best": "2",
+        "yolo_iou": 0.49082206216425295,
+        "resnet_pred": "2",
+        "resnet_conf": 0.9951686859130859,
+        "all_ious": [
+          {
+            "number": "1",
+            "iou": 0.048102261792376554,
+            "confidence": 0.7521883845329285
+          },
+          {
+            "number": "4",
+            "iou": 0.0,
+            "confidence": 0.7521127462387085
+          },
+          {
+            "number": "2",
+            "iou": 0.49082206216425295,
+            "confidence": 0.7308573126792908
+          },
+          {
+            "number": "5",
+            "iou": 0.0,
+            "confidence": 0.7134376764297485
+          },
+          {
+            "number": "3",
+            "iou": 0.0,
+            "confidence": 0.6956141591072083
+          }
+        ]
+      },
+      "debug_info": {
+        "original_bbox": [
+          164.3761749267578,
+          1751.6217041015625,
+          1136.717041015625,
+          2289.0126953125
+        ],
+        "expanded_bbox": [
+          114,
+          1701,
+          1186,
+          2339
+        ],
+        "crop_size": [
+          1072,
+          638
+        ],
+        "image_size": [
+          2332,
+          3212
+        ],
+        "answer_1_count": 1,
+        "answer_2_count": 0,
+        "problem_number_count": 1
+      }
+    },
+    {
+      "section_idx": 3,
+      "problem_number_ocr": "05",
+      "problem_number_override": false,
+      "answer_number": "3",
+      "correction": true,
+      "section_crop_path": "test/Hierarchical_crop/images/service_test/학생이 푼 문제(실전 모의고사) - 1/section_03.jpg",
+      "problem_crop_path": null,
+      "answer_1_crop_path": null,
+      "answer_2_crop_path": null,
+      "crop_success": true,
+      "is_boundary_issue": true,
+      "used_resnet": true,
+      "resnet_confidence": 0.9942670464515686,
+      "resnet_failed": false,
+      "answer_source": "answer_1_resnet",
+      "yolo_iou_verification": {
+        "yolo_best": "3",
+        "yolo_iou": 0.5397937398667206,
+        "resnet_pred": "3",
+        "resnet_conf": 0.9942670464515686,
+        "all_ious": [
+          {
+            "number": "2",
+            "iou": 0.0,
+            "confidence": 0.7569021582603455
+          },
+          {
+            "number": "4",
+            "iou": 0.0,
+            "confidence": 0.7479438781738281
+          },
+          {
+            "number": "1",
+            "iou": 0.0,
+            "confidence": 0.7274431586265564
+          },
+          {
+            "number": "5",
+            "iou": 0.0,
+            "confidence": 0.7234012484550476
+          },
+          {
+            "number": "3",
+            "iou": 0.5397937398667206,
+            "confidence": 0.7024614810943604
+          }
+        ]
+      },
+      "debug_info": {
+        "original_bbox": [
+          1189.266357421875,
+          1908.6044921875,
+          2079.3076171875,
+          2455.135009765625
+        ],
+        "expanded_bbox": [
+          1139,
+          1858,
+          2129,
+          2505
+        ],
+        "crop_size": [
+          990,
+          647
+        ],
+        "image_size": [
+          2332,
+          3212
+        ],
+        "answer_1_count": 1,
+        "answer_2_count": 0,
+        "problem_number_count": 1
+      }
+    },
+    {
+      "section_idx": 4,
+      "problem_number_ocr": "03",
+      "problem_number_override": false,
+      "answer_number": "3",
+      "correction": true,
+      "section_crop_path": "test/Hierarchical_crop/images/service_test/학생이 푼 문제(실전 모의고사) - 1/section_04.jpg",
+      "problem_crop_path": null,
+      "answer_1_crop_path": null,
+      "answer_2_crop_path": null,
+      "crop_success": true,
+      "is_boundary_issue": true,
+      "used_resnet": true,
+      "resnet_confidence": 0.9990137815475464,
+      "resnet_failed": false,
+      "answer_source": "answer_1_resnet",
+      "yolo_iou_verification": {
+        "yolo_best": "3",
+        "yolo_iou": 0.4491942594848505,
+        "resnet_pred": "3",
+        "resnet_conf": 0.9990137815475464,
+        "all_ious": [
+          {
+            "number": "3",
+            "iou": 0.4491942594848505,
+            "confidence": 0.7411296367645264
+          },
+          {
+            "number": "2",
+            "iou": 0.0723123795466424,
+            "confidence": 0.7395511865615845
+          },
+          {
+            "number": "1",
+            "iou": 0.0,
+            "confidence": 0.7378852963447571
+          },
+          {
+            "number": "4",
+            "iou": 0.0,
+            "confidence": 0.7266397476196289
+          },
+          {
+            "number": "5",
+            "iou": 0.0,
+            "confidence": 0.7245199680328369
+          }
+        ]
+      },
+      "debug_info": {
+        "original_bbox": [
+          173.43507385253906,
+          2497.14013671875,
+          1156.8624267578125,
+          3125.3095703125
+        ],
+        "expanded_bbox": [
+          123,
+          2447,
+          1206,
+          3175
+        ],
+        "crop_size": [
+          1083,
+          728
+        ],
+        "image_size": [
+          2332,
+          3212
+        ],
+        "answer_1_count": 1,
+        "answer_2_count": 0,
+        "problem_number_count": 1
+      }
+    }
+  ],
+  "processing_time": 3.7145259380340576,
+  "total_sections": 5,
+  "crop_failure_count": 0
+}

@@ -1,0 +1,9 @@
+﻿problem_type,total,correct,wrong,none,missing,accuracy,wrong_rate,none_rate,missing_rate
+answer_1_o,45,42,3,0,0,93.33,6.67,0.0,0.0
+answer_12_oo,29,29,0,0,0,100.0,0.0,0.0,0.0
+answer_12_xo,27,27,0,0,0,100.0,0.0,0.0,0.0
+answer_12_ox,27,27,0,0,0,100.0,0.0,0.0,0.0
+answer_12_xx,27,27,0,0,0,100.0,0.0,0.0,0.0
+answer_1_x,45,45,0,0,0,100.0,0.0,0.0,0.0
+answer_2_o,45,45,0,0,0,100.0,0.0,0.0,0.0
+answer_2_x,45,45,0,0,0,100.0,0.0,0.0,0.0
