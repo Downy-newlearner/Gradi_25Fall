@@ -1,0 +1,70 @@
+# Routing Experiment 1004 - YOLOv8n @ 1280 (큰 객체 전용)
+
+task: detect
+mode: train
+model: yolov8n.pt
+data: /home/jdh251425/2509 Gradi-Detection/Data/english_large4_251004/data.yaml
+
+# 학습
+epochs: 100
+patience: 25
+batch: 8
+imgsz: 1280
+device: [0,1]  # GPU 0,1 사용
+workers: 8
+
+# 프로젝트
+project: /home/jdh251425/2509 Gradi-Detection/experiment_routing_1004/yolov8n_imgsz_1280
+name: train
+exist_ok: true
+
+# 옵티마이저
+optimizer: AdamW
+lr0: 0.01
+lrf: 0.01
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 2.0
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+
+# Loss
+box: 7.5
+cls: 1.5
+dfl: 1.5
+
+# 스캔 이미지 친화
+rect: true
+multi_scale: false
+
+# 증강 없음 (모든 증강 비활성화)
+degrees: 0
+perspective: 0.0
+translate: 0.0
+scale: 0.0
+shear: 0.0
+flipud: 0.0
+fliplr: 0.0
+mosaic: 0.0
+mixup: 0.0
+cutmix: 0.0
+copy_paste: 0.0
+auto_augment: null
+hsv_h: 0.0
+hsv_s: 0.0
+hsv_v: 0.0
+erasing: 0.0
+
+# 검증/추론
+iou: 0.7
+conf: 0.12
+max_det: 300
+val: true
+amp: true
+plots: true
+verbose: true
+seed: 0
+deterministic: true
+single_cls: false
+cos_lr: false
+cache: false

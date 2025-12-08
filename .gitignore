@@ -56,6 +56,8 @@ ai-service/models/*.pkl
 ai-service/models/*.joblib
 ai-service/models/*.h5
 ai-service/models/*.pb
+ai-service/models/*.jpg
+ai-service/test/*.jpg
 
 # Database
 database/*.sql.bak
@@ -91,5 +93,16 @@ tmp/
 temp/
 *.tmp
 
+
+# images
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# video
+*.mp4
+*.mov
 # Cursor (local AI assistant rules and cache)
 .cursor/
+

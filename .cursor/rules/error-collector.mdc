@@ -1,0 +1,300 @@
+---
+alwaysApply: true
+description: Flutter UI Error Prevention and Layout Best Practices Guide
+---
+
+# Error Collector - Flutter UI Error Prevention Guide
+
+## 🚨 Overflow Error Analysis (2025.09.27)
+
+### Root Cause Analysis
+
+#### 1. **Fixed Size Container Misuse**
+
+```dart
+// ❌ Wrong - Forcing fixed dimensions
+Container(
+  width: 402,    // Ignores device screen size
+  height: 874,   // Ignores device screen size
+  child: Column(...) // Content can overflow
+)
+```
+
+**Problems:**
+
+- Ignores different device screen sizes
+- Doesn't consider SafeArea, keyboard, and other dynamic elements
+- Fails to calculate total height of Column children
+
+#### 2. **Unnecessary StatusBar Widget Implementation**
+
+```dart
+// ❌ Wrong - Duplicating native functionality
+const StatusBar(), // iOS/Android already provides this
+```
+
+**Problems:**
+
+- Conflicts with platform-specific status bar styles
+- Takes up unnecessary layout space
+- Duplicates native SafeArea functionality
+
+#### 3. **Layout Constraint Ignorance**
+
+```dart
+// ❌ Wrong - Non-scrollable fixed layout
+Column(
+  children: [
+    // Widgets whose total height can exceed screen
+    Widget1(), Widget2(), Widget3()...
+  ]
+)
+```
+
+## 🛡️ Error Prevention Rules
+
+### 1. **Layout Design Principles**
+
+#### ✅ DO: Use Responsive Layouts
+
+```dart
+// Correct example
+SingleChildScrollView(
+  child: ConstrainedBox(
+    constraints: BoxConstraints(
+      minHeight: MediaQuery.of(context).size.height -
+                 MediaQuery.of(context).padding.top -
+                 MediaQuery.of(context).padding.bottom,
+    ),
+    child: Column(...)
+  )
+)
+```
+
+#### ❌ DON'T: Fixed Size Containers
+
+```dart
+// Forbidden pattern
+Container(
+  width: 402,  // Absolute size forbidden
+  height: 874, // Absolute size forbidden
+  child: Column(...)
+)
+```
+
+### 2. **SafeArea and Platform Considerations**
+
+#### ✅ DO: Utilize Native Features
+
+```dart
+Scaffold(
+  body: SafeArea( // Automatically handles iOS notch, Android status bar
+    child: YourContent()
+  )
+)
+```
+
+#### ❌ DON'T: Duplicate Platform Features
+
+```dart
+// Forbidden pattern - Creating StatusBar widget
+const StatusBar() // iOS/Android already provides this
+```
+
+### 3. **Container Size Rules**
+
+#### ✅ DO: Dynamic Size Calculation
+
+```dart
+Container(
+  width: MediaQuery.of(context).size.width * 0.85, // Screen ratio based
+  child: Column(
+    mainAxisSize: MainAxisSize.min, // Adjust size to content
+    children: [...]
+  )
+)
+```
+
+#### ❌ DON'T: Arbitrary Fixed Values
+
+```dart
+Container(
+  width: 342,  // Ignores device differences
+  height: 120, // Ignores content changes
+)
+```
+
+### 4. **Scroll Handling Rules**
+
+#### ✅ DO: Prevent Overflow
+
+```dart
+// When content might exceed screen
+SingleChildScrollView(
+  child: Column(children: [...])
+)
+
+// Or use ListView
+ListView(children: [...])
+```
+
+#### ❌ DON'T: Long Column Without Scroll
+
+```dart
+Column( // Overflow risk
+  children: [
+    // Many widgets...
+  ]
+)
+```
+
+### 5. **Button Structure Design Principles**
+
+#### ✅ DO: Simple Button Structure
+
+```dart
+// Correct - Direct button implementation
+SizedBox(
+  width: 50,
+  height: 50,
+  child: ElevatedButton(
+    onPressed: onPressed,
+    style: ElevatedButton.styleFrom(
+      backgroundColor: color,
+      padding: EdgeInsets.zero, // Important!
+      shape: RoundedRectangleBorder(...),
+    ),
+    child: Icon(...),
+  ),
+)
+```
+
+#### ❌ DON'T: Double Container Structure
+
+```dart
+// Forbidden pattern - Causes button distortion
+Container( // Outer container
+  decoration: BoxDecoration(...),
+  child: ElevatedButton( // Inner button - gets distorted!
+    child: content,
+  ),
+)
+```
+
+### 6. **Alignment and Layout Principles**
+
+#### ✅ DO: Explicit Alignment Settings
+
+```dart
+Column(
+  mainAxisAlignment: MainAxisAlignment.center,
+  crossAxisAlignment: CrossAxisAlignment.center, // Essential!
+  children: [...]
+)
+```
+
+#### ❌ DON'T: Missing Alignment Properties
+
+```dart
+Column( // Missing alignment causes left bias
+  children: [...]
+)
+```
+
+### 7. **Development Workflow Principles**
+
+#### ✅ DO: Utilize Hot Reload
+
+```dart
+// After code changes:
+// 1. Save file (Cmd+S)
+// 2. Press 'r' in terminal
+// 3. Instantly see changes
+```
+
+#### ❌ DON'T: Unnecessary App Restarts
+
+```dart
+// Forbidden patterns:
+// - Complete app shutdown and restart
+// - Emulator reboot
+// - flutter clean (only when necessary)
+```
+
+## 🔍 Development Checklists
+
+### Pre-Layout Development Checklist
+
+- [ ] Works on various screen sizes?
+- [ ] Considers SafeArea?
+- [ ] No possibility of content exceeding screen?
+- [ ] Doesn't duplicate native features?
+
+### Widget Implementation Prohibitions
+
+- [ ] No fixed width/height values (without special reason)
+- [ ] No platform feature reimplementation
+- [ ] No screen size assumptions without MediaQuery
+- [ ] No missing overflow handling in Column/Row
+
+### Button Distortion Prevention Checklist
+
+- [ ] No Container + ElevatedButton double structure
+- [ ] Set ElevatedButton padding: EdgeInsets.zero
+- [ ] Handle background/border directly in ElevatedButton.styleFrom
+- [ ] Use SizedBox for size constraints, handle decoration in style
+
+### Alignment Issue Prevention Checklist
+
+- [ ] Specify mainAxisAlignment in Column/Row
+- [ ] Always set crossAxisAlignment
+- [ ] Use CrossAxisAlignment.center for center alignment
+- [ ] Clearly define layout alignment intent
+
+### Development Efficiency Checklist
+
+- [ ] Prioritize Hot Reload (r key)
+- [ ] Use Hot Restart only when state reset needed (R key)
+- [ ] App restart only as last resort
+- [ ] Emulator reboot only for system issues
+
+### Testing Requirements
+
+- [ ] Test on various device sizes
+- [ ] Check layout when keyboard appears
+- [ ] Test portrait/landscape mode switching
+- [ ] Test long text/large data scenarios
+
+## 📚 References
+
+### Flutter Layout Widget Priority
+
+1. **SingleChildScrollView** - Overflow prevention
+2. **MediaQuery** - Screen size information
+3. **SafeArea** - Platform-specific safe areas
+4. **ConstrainedBox/Flexible/Expanded** - Dynamic size adjustment
+5. **LayoutBuilder** - Parent constraint-based layout
+
+### Debugging Tools
+
+```dart
+// Display layout boundaries during development
+import 'package:flutter/rendering.dart';
+debugPaintSizeEnabled = true; // Set in main()
+```
+
+## 🎯 Core Lessons
+
+**"All UI elements must be designed responsively, considering device sizes and platform characteristics. Buttons should have simple structures, alignment should be explicit, and development should utilize Hot Reload efficiently."**
+
+### Key Principles:
+
+1. **No Absolute Sizes** - All sizes must be relative
+2. **Respect Platforms** - Don't duplicate native functionality
+3. **Prepare for Overflow** - Always consider scroll possibilities
+4. **Simple Button Structure** - Avoid double container structures
+5. **Explicit Alignment** - Always set crossAxisAlignment
+6. **Utilize Hot Reload** - Maximize development efficiency
+7. **Test First** - Verify in various environments
+
+Follow these rules to prevent future layout errors and provide consistent user experience.

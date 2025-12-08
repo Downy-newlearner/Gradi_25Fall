@@ -1,0 +1,304 @@
+---
+alwaysApply: true
+description: Collection of error patterns to avoid repetition in UI/UX design and Flutter development
+---
+
+# Error Collector - Concise Rules
+
+Authoritative, deduplicated rules to prevent recurring UI/UX and Flutter code mistakes. Follow these every time.
+
+## 1) Layout & Responsiveness
+
+### ❌ Never use fixed positioning; use relative sizing
+
+**Error Pattern**: Using fixed-width containers and Row widgets that constrains input field widths instead of allowing them to span the full available width.
+
+**Example of WRONG approach**:
+
+```dart
+Row(
+  children: [
+    Expanded(
+      child: LabeledInputField(...), // ✅ This part is correct
+    ),
+    const SizedBox(width: 12), // ❌ Fixed spacing
+    SizedBox(
+      width: 90, // ❌ FIXED WIDTH - This breaks responsive design
+      child: ElevatedButton(...),
+    ),
+  ],
+)
+```
+
+Pattern to follow:
+
+```dart
+Row(
+  children: [
+    Expanded(
+      flex: 7, // ✅ Relative sizing, lets input field span reasonable width
+      child: Column(...), // Contains label + input + error message
+    ),
+    const SizedBox(width: 12), // ✅ Fixed spacing between elements is OK
+    Expanded(
+      flex: 3, // ✅ Relative sizing, proportionally sized button
+      child: Container(
+        height: 50, // ✅ Fixed height is OK for consistency
+        child: ElevatedButton(...),
+      ),
+    ),
+  ],
+)
+```
+
+Why:
+
+- Fixed widths break responsiveness.
+- Inputs should span full available width to stay centered.
+- Buttons must be proportional to inputs (use `Expanded` with `flex`).
+
+### ✅ Keep input widths consistent
+
+- Inputs use identical container width and height 50.
+- Buttons sized proportionally via `Expanded(flex: ratio)`.
+
+### ✅ Match visual spec precisely
+
+- Verify: horizontal centering, right-side button placement, vertical/horizontal spacing, and overall balance.
+
+## 2) Async UI Safety & State
+
+### ❌ Never call setState() after dispose()
+
+**Error Pattern**: Using setState() in async operations without checking mounted state.
+
+**Wrong**:
+
+```dart
+Future<void> apiCall() async {
+  setState(() {
+    _isLoading = true;
+  });
+
+  final response = await http.get(...);
+
+  setState(() { // ❌ Could be called after dispose()
+    _isLoading = false;
+  });
+}
+```
+
+Correct:
+
+```dart
+Future<void> apiCall() async {
+  setState(() {
+    _isLoading = true;
+  });
+
+  final response = await http.get(...);
+
+  if (mounted) { // ✅ Always check mounted state
+    setState(() {
+      _isLoading = false;
+    });
+  }
+}
+```
+
+### ✅ Do not assume widget parameters exist
+
+Read the widget definition first; if missing, compose a custom layout.
+
+## 3) Team Memory Hygiene
+
+- After critical fixes, document root cause, solution, and prevention here.
+
+---
+
+## Next Error Patterns Will Be Added Here
+
+As new critical errors are discovered during development, they will be added to this file to prevent repetition.
+
+## 4) Imports Hygiene
+
+### ❌ Unnecessary imports overlapping with `material.dart`
+
+Error Pattern:
+
+- Importing `package:flutter/services.dart` while all used symbols are already exposed via `package:flutter/material.dart`, triggering “unnecessary_import”.
+
+Prevention:
+
+- Prefer `material.dart` for UI.
+- Use “Organize Imports” and keep `unnecessary_import` lint on.
+- If auto-complete works without a new import, don’t add it.
+
+## 5) Using BuildContext Across Async Gaps (`use_build_context_synchronously`)
+
+Error Pattern:
+
+- Calling `setState`, `Navigator` (e.g., `pushNamed`), or `ScaffoldMessenger.of(context)` after an `await` without verifying the widget is still mounted. If the widget is disposed, these calls will crash or misbehave.
+
+Prevention:
+
+- Immediately after any awaited async call, guard UI interactions with `if (!mounted) return;` or `if (mounted) { ... }`.
+- Prefer early returns to keep flow clear:
+
+```dart
+final response = await http.post(...);
+if (!mounted) return;
+setState(() { _isLoading = false; });
+Navigator.pushNamed(context, '/route');
+```
+
+- Guard snackbars/navigation in success/else/catch with `if (mounted)`.
+- Avoid capturing `context` in long-lived futures.
+- In `finally`, wrap `setState` with `if (mounted)`.
+
+## 6) Constructors (`use_super_parameters`)
+
+Error Pattern:
+
+- Declaring constructors with an explicit `Key? key` parameter and forwarding it manually (`: super(key: key)`) instead of using Dart's super parameter feature, which triggers the `use_super_parameters` lint.
+
+Prevention:
+
+- Prefer `const MyWidget({super.key});`
+- Keep `super.key` first among named params.
+- Run `dart fix --apply` periodically.
+
+Wrong:
+
+```dart
+class MyWidget extends StatelessWidget {
+  const MyWidget({Key? key}) : super(key: key);
+}
+```
+
+Correct:
+
+```dart
+class MyWidget extends StatelessWidget {
+  const MyWidget({super.key});
+}
+```
+
+## 7) Widget Tree Integrity
+
+Error Pattern:
+
+- Deeply nested Flutter widget trees (e.g., `Row` → `Expanded` → `Padding` → `SizedBox` → `ElevatedButton`) were missing one or more closing parentheses, producing analyzer errors like “Expected to find ')'.”
+- Typical failure points happen right after multi-line widget constructors, especially when adding/removing wrappers such as `Expanded` or `Padding`.
+
+Prevention:
+
+- Use trailing commas to help formatter balance parentheses.
+- Verify each wrapper has a closing `),`.
+- Extract subtrees to keep depth ≤ 2–3 levels.
+- Fix the first “Expected to find ')'” before moving on.
+
+### ❌ Unnecessary Imports Overlapping With `material.dart`
+
+Error Pattern:
+
+- Importing `package:flutter/services.dart` while all used symbols are already exposed via `package:flutter/material.dart`, triggering “unnecessary_import”.
+
+Prevention:
+
+- Prefer importing `material.dart` for UI layers unless a symbol is strictly outside Material (then import the narrow package explicitly).
+- Use IDE “Organize Imports” regularly and keep the `unnecessary_import` lint enabled.
+- Before adding a new import, attempt auto-complete; if it resolves without the new import, do not add it.
+
+## 8) Test Imports
+
+Error Pattern:
+
+- Tests importing `package:flutter/material.dart` without using any of its symbols, causing “unused_import”.
+
+Prevention:
+
+- In tests, import only the packages actually used (`flutter_test`, app `main.dart`, or specific widgets/helpers).
+- Run `dart analyze` as part of pre-commit to surface unused imports early.
+
+## 9) Implementation Tips
+
+- Use trailing commas consistently in Flutter widget trees; rely on formatter to layout and reveal missing parentheses.
+- After wrapping existing code with a new widget, immediately add its closing `),` and format before editing inner content.
+- Keep widget trees shallow by extracting components; aim for ≤ 2–3 nesting levels per method.
+- Maintain a quick “wrapper checklist” when editing: Row → Expanded → Padding → SizedBox → Child → close in reverse order.
+
+## 10) Whitespace Containers (sized_box_for_whitespace)
+
+- Do not use `Container(width/height)` only for spacing.
+- Use `SizedBox(width: ..., height: ...)` for whitespace.
+
+## 11) Logging Hygiene (avoid_print)
+
+- Do not use `print` in app code; prefer `dart:developer` (`developer.log`) or a logging package.
+- Keep user-facing feedback via `ScaffoldMessenger`, developer diagnostics via logs.
+
+## 12) String Interpolation Cleanliness
+
+- Avoid unnecessary braces in string interpolation: use `$value` instead of `${value}` for simple identifiers.
+- Use `${...}` only when evaluating expressions.
+
+## 13) Deprecated API Replacements
+
+- Avoid deprecated `ColorScheme` members such as `background`/`onBackground`.
+- Prefer Material 3 fields like `surface`/`onSurface` and verify with analyzer.
+
+### ❌ Missing `super` Parameters in Widget Constructors
+
+Error Pattern:
+
+- Declaring constructors with an explicit `Key? key` parameter and forwarding it manually (`: super(key: key)`) instead of using Dart's super parameter feature, which triggers the `use_super_parameters` lint.
+
+Prevention:
+
+- Prefer super parameters in Flutter widgets: `const MyWidget({super.key});`
+- When adding new optional parameters, keep `super.key` as the first positional named parameter for consistency.
+- Run `dart fix --apply` periodically to catch and migrate remaining constructors.
+
+Wrong:
+
+```dart
+class MyWidget extends StatelessWidget {
+  const MyWidget({Key? key}) : super(key: key);
+}
+```
+
+Correct:
+
+```dart
+class MyWidget extends StatelessWidget {
+  const MyWidget({super.key});
+}
+```
+
+### ❌ Using BuildContext Across Async Gaps (`use_build_context_synchronously`)
+
+Error Pattern:
+
+- Calling `Navigator`, `ScaffoldMessenger`, or `setState` after an `await` without verifying the widget is still mounted, leading to crashes or undefined behavior.
+
+Prevention:
+
+- Immediately after any awaited async call, guard UI interactions with `if (!mounted) return;` or wrap calls in `if (mounted) { ... }`.
+- Avoid capturing `context` into long-lived futures. Pass data, not `BuildContext`, and centralize navigation in small helpers that check `mounted`.
+- Handle all branches (success, 4xx/5xx, catch) consistently with a mounted guard before using `context`.
+
+Wrong:
+
+```dart
+final resp = await http.post(...);
+Navigator.pushNamed(context, '/next'); // ❌ may run after dispose
+```
+
+Correct:
+
+```dart
+final resp = await http.post(...);
+if (!mounted) return; // ✅ guard after async gap
+Navigator.pushNamed(context, '/next');
+```

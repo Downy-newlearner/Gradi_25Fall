@@ -1,0 +1,33 @@
+{
+  "total_images": 85,
+  "processed_images": 85,
+  "total_detections": 1435,
+  "average_detections_per_image": 16.88235294117647,
+  "class_counts": {
+    "answer_option": 206,
+    "english_content": 147,
+    "korean_content": 208,
+    "section": 232,
+    "page_number": 93,
+    "problem_number": 224,
+    "answer_1": 167,
+    "answer_2": 158
+  },
+  "average_confidence": 0.742743023326588,
+  "routing_strategy": {
+    "small_objects": [
+      "problem_number",
+      "answer_2",
+      "page_number",
+      "answer_1"
+    ],
+    "large_objects": [
+      "section",
+      "answer_option",
+      "korean_content",
+      "english_content"
+    ],
+    "small_model_conf": 0.22,
+    "large_model_conf": 0.12
+  }
+}
