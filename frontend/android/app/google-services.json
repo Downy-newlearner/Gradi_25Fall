@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "120799260544",
+    "project_id": "gradi-bd52c",
+    "storage_bucket": "gradi-bd52c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:120799260544:android:a8e550dc78b59824b19b65",
+        "android_client_info": {
+          "package_name": "com.gradi.gradi_frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDoT9s6gZZQ6dCznYqVK3_aMDJCXVIHcRk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

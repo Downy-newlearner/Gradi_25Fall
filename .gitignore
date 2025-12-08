@@ -93,6 +93,7 @@ tmp/
 temp/
 *.tmp
 
+
 # images
 *.jpg
 *.jpeg
@@ -104,3 +105,4 @@ temp/
 *.mov
 # Cursor (local AI assistant rules and cache)
 .cursor/
+
